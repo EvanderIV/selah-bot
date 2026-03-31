@@ -80,6 +80,17 @@ public class App {
                     .awaitReady();
 
             System.out.println("Selah Online. Logged in as " + jda.getSelfUser().getName());
+
+            if (args.length > 1 && "archive".equalsIgnoreCase(args[0])) {
+                String channelId = args[1];
+                ArchiveManager.archiveChannel(jda, channelId);
+                System.out.println("Lifecycle complete. Shutting down...");
+                // Quit program
+                System.out.println("Shutting down JDA...");
+                jda.shutdown();
+                System.out.println("Shutdown complete. Exiting.");
+                return;
+            }
             
             // 0. Synchronize channels on startup
             StatsManager.synchronizeChannels(jda);

@@ -39,13 +39,19 @@ public class ModerationListener extends ListenerAdapter {
      * @return A score from 0.0 to 1.0.
      */
     private double getHeatIndex(MessageReceivedEvent event) {
-        String message = event.getMessage().getContentRaw();
+        String originalMessage = event.getMessage().getContentRaw();
+        
+        // Strip URLs from the message before analysis
+        String messageForAnalysis = originalMessage.replaceAll("https?://\\S+", "");
 
         if (App.DEBUG_MODE) {
             String author = event.getAuthor().getName();
             String channel = event.getChannel().getName();
             System.out.println("\n[DEBUG] --- Heat Index for " + author + " in #" + channel + " ---");
-            System.out.println("[DEBUG] Message: \"" + message + "\"");
+            System.out.println("[DEBUG] Original Message: \"" + originalMessage + "\"");
+            if (!originalMessage.equals(messageForAnalysis)) {
+                System.out.println("[DEBUG] Message for Analysis (URLs stripped): \"" + messageForAnalysis + "\"");
+            }
 
             // Check for reply
             if (event.getMessage().getReferencedMessage() != null) {
@@ -54,10 +60,10 @@ public class ModerationListener extends ListenerAdapter {
         }
 
         double heat = 0;
-        heat += checkKeywords(message);
-        heat += checkCapitalization(message);
-        heat += checkMessageLength(message);
-        heat += checkPunctuation(message);
+        heat += checkKeywords(messageForAnalysis);
+        heat += checkCapitalization(messageForAnalysis);
+        heat += checkMessageLength(messageForAnalysis);
+        heat += checkPunctuation(messageForAnalysis);
 
         double finalHeat = Math.min(1.0, heat); // Cap the heat at 1.0
         finalHeat = Math.round(finalHeat * 1000.0) / 1000.0;
@@ -82,9 +88,15 @@ public class ModerationListener extends ListenerAdapter {
 
         // Check for standard keywords
         for (Keyword keyword : KeywordManager.keywords) {
-            if (normalizedMessage.contains(keyword.word)) {
+            // Use word boundaries to match whole words
+            String pattern = "\\b" + keyword.word + "\\b";
+            if (java.util.regex.Pattern.compile(pattern).matcher(normalizedMessage).find()) {
                 foundKeywords.add(keyword);
                 heat += keyword.heat;
+            } else if (normalizedMessage.contains(keyword.word)) {
+                // If it's part of another word, add a reduced heat
+                foundKeywords.add(new Keyword(keyword.word + "*", 0.2));
+                heat += 0.2;
             }
         }
 
@@ -182,7 +194,7 @@ public class ModerationListener extends ListenerAdapter {
         }
 
         long apostropheCount = message.chars().filter(ch -> ch == '\'').count();
-        if (apostropheCount > 0) {
+        if (apostropheCount >= 3) {
             double apostropheHeat = Math.min(0.2, apostropheCount * 0.05); // Cap heat
             heat += apostropheHeat;
             if (App.DEBUG_MODE) System.out.println("[DEBUG] Found " + apostropheCount + " apostrophe(s) (+" + String.format("%.3f", apostropheHeat) + ")");
