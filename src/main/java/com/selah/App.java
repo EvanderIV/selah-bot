@@ -15,6 +15,8 @@ import net.dv8tion.jda.api.requests.GatewayIntent;
 
 public class App {
 
+    public static final String WORKING_DIRECTORY = "home/evanm/Bots/selah-bot/";
+
     // --- 1. Java Object Mappings for Gson ---
     // These classes strictly mirror the structure of servers.json
     public static class ConfigData {
@@ -76,7 +78,7 @@ public class App {
      * Reads servers.json and populates the guildConfigs HashMap.
      */
     private static void loadConfigurations() {
-        Path configPath = Path.of("../servers.json");
+        Path configPath = Path.of(WORKING_DIRECTORY + "servers.json");
         
         if (!Files.exists(configPath)) {
             System.err.println("WARNING: servers.json not found. The bot will run, but with no active configs.");

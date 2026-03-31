@@ -81,7 +81,7 @@ public class StatsManager {
         
         for (App.ServerNode serverConfig : App.guildConfigs.values()) {
             String serverId = serverConfig.id;
-            Path filePath = Path.of("../stats_" + serverId + ".json");
+            Path filePath = Path.of(App.WORKING_DIRECTORY + "stats_" + serverId + ".json");
             
             if (Files.exists(filePath)) {
                 try (Reader reader = Files.newBufferedReader(filePath)) {
