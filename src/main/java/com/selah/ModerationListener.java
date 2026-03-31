@@ -18,10 +18,9 @@ public class ModerationListener extends ListenerAdapter {
         String channelName = event.getChannel().getName();
         String memberId = event.getAuthor().getId();
         String memberName = event.getAuthor().getName();
-        String messageContent = event.getMessage().getContentRaw();
 
         // 1. Calculate the heat of the message
-        double heatIndex = getHeatIndex(messageContent);
+        double heatIndex = getHeatIndex(event);
 
         // 2. Update the channel's running statistics
         StatsManager.updateChannelStats(serverId, channelId, channelName, heatIndex);
@@ -33,29 +32,49 @@ public class ModerationListener extends ListenerAdapter {
     /**
      * A placeholder for a more complex toxicity detection algorithm.
      * For now, it will just score based on a few keywords and all-caps usage.
-     * @param message The raw content of the message.
+     * @param event The message event containing all context.
      * @return A score from 0.0 to 1.0.
      */
-    private double getHeatIndex(String message) {
+    private double getHeatIndex(MessageReceivedEvent event) {
+        String message = event.getMessage().getContentRaw();
+        int keywordMatches = 0;
+
         if (App.DEBUG_MODE) {
-            System.out.println("\n[DEBUG] --- Calculating Heat Index ---");
+            String author = event.getAuthor().getName();
+            String channel = event.getChannel().getName();
+            System.out.println("\n[DEBUG] --- " + author + " wrote in #" + channel + " ---");
             System.out.println("[DEBUG] Message: \"" + message + "\"");
+
+            // Check for reply
+            if (event.getMessage().getReferencedMessage() != null) {
+                System.out.println("[DEBUG] In reply to: \"" + event.getMessage().getReferencedMessage().getContentRaw() + "\"");
+            }
         }
 
         double heat = 0.0;
 
-        // Simple keyword check (expand with more sophisticated NLP later)
-        if (message.matches("(?i).*\\b(hate|stupid|idiot)\\b.*")) {
-            heat += 0.4;
-            if (App.DEBUG_MODE) System.out.println("[DEBUG] Keyword match found (+0.4)");
+        // Simple keyword check
+        String[] keywords = {"hate", "stupid", "idiot"};
+        for (String keyword : keywords) {
+            if (message.toLowerCase().contains(keyword)) {
+                keywordMatches++;
+            }
         }
+
+        if (keywordMatches > 0) {
+            heat += (0.2 * keywordMatches); // Add 0.2 for each keyword
+            if (App.DEBUG_MODE) System.out.println("[DEBUG] " + keywordMatches + " keyword match(es) found (+" + String.format("%.2f", 0.2 * keywordMatches) + ")");
+        }
+
 
         // Check for excessive capitalization
         long upperCaseChars = message.chars().filter(Character::isUpperCase).count();
-        double upperCaseRatio = (double) upperCaseChars / message.length();
+        double upperCaseRatio = message.isEmpty() ? 0 : (double) upperCaseChars / message.length();
         if (message.length() > 10 && upperCaseRatio > 0.7) {
             heat += 0.3;
             if (App.DEBUG_MODE) System.out.println("[DEBUG] Excessive caps detected (" + String.format("%.2f", upperCaseRatio * 100) + "%) (+0.3)");
+        } else if (App.DEBUG_MODE) {
+            System.out.println("[DEBUG] Capitalization: " + String.format("%.2f", upperCaseRatio * 100) + "%");
         }
         
         // Check for excessive message length
