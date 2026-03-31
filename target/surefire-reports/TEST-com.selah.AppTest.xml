@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" name="com.selah.AppTest" time="0.02" tests="1" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" name="com.selah.AppTest" time="0.015" tests="1" errors="0" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="25"/>
     <property name="sun.cpu.isalist" value="amd64"/>
@@ -15,7 +15,7 @@
     <property name="sun.java.launcher" value="SUN_STANDARD"/>
     <property name="user.country" value="US"/>
     <property name="sun.boot.library.path" value="C:\Program Files\Java\jdk-25.0.2\bin"/>
-    <property name="sun.java.command" value="C:\Users\evanm\AppData\Local\Temp\surefire13765934158522873881\surefirebooter17271121816424308942.jar C:\Users\evanm\AppData\Local\Temp\surefire13765934158522873881 2026-03-31T00-53-00_896-jvmRun1 surefire3518296307405665963tmp surefire_017207367325832919224tmp"/>
+    <property name="sun.java.command" value="C:\Users\evanm\AppData\Local\Temp\surefire9524895855054111912\surefirebooter1043101280986871889.jar C:\Users\evanm\AppData\Local\Temp\surefire9524895855054111912 2026-03-31T01-00-45_642-jvmRun1 surefire4127591003880001355tmp surefire_01392785299305706771tmp"/>
     <property name="jdk.debug" value="release"/>
     <property name="surefire.test.class.path" value="C:\Users\evanm\Documents\selah-bot\target\test-classes;C:\Users\evanm\Documents\selah-bot\target\classes;C:\Users\evanm\.m2\repository\net\dv8tion\JDA\5.0.0-beta.21\JDA-5.0.0-beta.21.jar;C:\Users\evanm\.m2\repository\org\slf4j\slf4j-api\1.7.36\slf4j-api-1.7.36.jar;C:\Users\evanm\.m2\repository\com\neovisionaries\nv-websocket-client\2.14\nv-websocket-client-2.14.jar;C:\Users\evanm\.m2\repository\com\squareup\okhttp3\okhttp\4.12.0\okhttp-4.12.0.jar;C:\Users\evanm\.m2\repository\com\squareup\okio\okio\3.6.0\okio-3.6.0.jar;C:\Users\evanm\.m2\repository\com\squareup\okio\okio-jvm\3.6.0\okio-jvm-3.6.0.jar;C:\Users\evanm\.m2\repository\org\jetbrains\kotlin\kotlin-stdlib-common\1.9.10\kotlin-stdlib-common-1.9.10.jar;C:\Users\evanm\.m2\repository\org\jetbrains\kotlin\kotlin-stdlib-jdk8\1.8.21\kotlin-stdlib-jdk8-1.8.21.jar;C:\Users\evanm\.m2\repository\org\jetbrains\kotlin\kotlin-stdlib\1.8.21\kotlin-stdlib-1.8.21.jar;C:\Users\evanm\.m2\repository\org\jetbrains\annotations\13.0\annotations-13.0.jar;C:\Users\evanm\.m2\repository\org\jetbrains\kotlin\kotlin-stdlib-jdk7\1.8.21\kotlin-stdlib-jdk7-1.8.21.jar;C:\Users\evanm\.m2\repository\club\minnced\opus-java\1.1.1\opus-java-1.1.1.jar;C:\Users\evanm\.m2\repository\club\minnced\opus-java-api\1.1.1\opus-java-api-1.1.1.jar;C:\Users\evanm\.m2\repository\net\java\dev\jna\jna\4.4.0\jna-4.4.0.jar;C:\Users\evanm\.m2\repository\club\minnced\opus-java-natives\1.1.1\opus-java-natives-1.1.1.jar;C:\Users\evanm\.m2\repository\org\apache\commons\commons-collections4\4.4\commons-collections4-4.4.jar;C:\Users\evanm\.m2\repository\net\sf\trove4j\trove4j\3.0.3\trove4j-3.0.3.jar;C:\Users\evanm\.m2\repository\com\fasterxml\jackson\core\jackson-core\2.16.0\jackson-core-2.16.0.jar;C:\Users\evanm\.m2\repository\com\fasterxml\jackson\core\jackson-databind\2.16.0\jackson-databind-2.16.0.jar;C:\Users\evanm\.m2\repository\com\fasterxml\jackson\core\jackson-annotations\2.16.0\jackson-annotations-2.16.0.jar;C:\Users\evanm\.m2\repository\com\google\code\gson\gson\2.10.1\gson-2.10.1.jar;C:\Users\evanm\.m2\repository\ch\qos\logback\logback-classic\1.4.14\logback-classic-1.4.14.jar;C:\Users\evanm\.m2\repository\ch\qos\logback\logback-core\1.4.14\logback-core-1.4.14.jar;C:\Users\evanm\.m2\repository\junit\junit\4.11\junit-4.11.jar;C:\Users\evanm\.m2\repository\org\hamcrest\hamcrest-core\1.3\hamcrest-core-1.3.jar;"/>
     <property name="sun.cpu.endian" value="little"/>
@@ -30,7 +30,7 @@
     <property name="line.separator" value="&#10;"/>
     <property name="java.vm.specification.vendor" value="Oracle Corporation"/>
     <property name="java.specification.name" value="Java Platform API Specification"/>
-    <property name="surefire.real.class.path" value="C:\Users\evanm\AppData\Local\Temp\surefire13765934158522873881\surefirebooter17271121816424308942.jar"/>
+    <property name="surefire.real.class.path" value="C:\Users\evanm\AppData\Local\Temp\surefire9524895855054111912\surefirebooter1043101280986871889.jar"/>
     <property name="user.script" value=""/>
     <property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
     <property name="java.runtime.version" value="25.0.2+10-LTS-69"/>
@@ -59,5 +59,5 @@
     <property name="sun.io.unicode.encoding" value="UnicodeLittle"/>
     <property name="java.class.version" value="69.0"/>
   </properties>
-  <testcase name="shouldAnswerWithTrue" classname="com.selah.AppTest" time="0.002"/>
+  <testcase name="shouldAnswerWithTrue" classname="com.selah.AppTest" time="0.001"/>
 </testsuite>

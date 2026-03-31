@@ -77,6 +77,19 @@ public class StatsManager {
      * Should be called during the bot's boot sequence.
      */
     public static void loadServerStats() {
+        // --- Create the directory if it doesn't exist ---
+        Path statsDir = Path.of(App.WORKING_DIRECTORY + "server_stats");
+        if (!Files.exists(statsDir)) {
+            try {
+                Files.createDirectories(statsDir);
+                System.out.println("INFO: 'server_stats' directory not found. Creating it now.");
+            } catch (IOException e) {
+                System.err.println("CRITICAL: Failed to create the 'server_stats' directory. Statistics will not be saved.");
+                e.printStackTrace();
+                return; // Exit if we can't create the directory
+            }
+        }
+        
         Gson gson = new Gson();
         
         for (App.ServerNode serverConfig : App.guildConfigs.values()) {

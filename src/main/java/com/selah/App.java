@@ -51,7 +51,7 @@ public class App {
             System.err.println("ERROR: Please set the SELAH_DISCORD_TOKEN environment variable.");
             return;
         }
-
+        
         try {
             JDA jda = JDABuilder.createDefault(token)
                     .enableIntents(GatewayIntent.MESSAGE_CONTENT)
