@@ -81,7 +81,7 @@ public class App {
         Path configPath = Path.of(WORKING_DIRECTORY + "servers.json");
         
         if (!Files.exists(configPath)) {
-            System.err.println("WARNING: servers.json not found. The bot will run, but with no active configs.");
+            System.err.println("WARNING: servers.json not found. (\"" + WORKING_DIRECTORY + " servers.json\") The bot will run, but with no active configs.");
             return;
         }
 
