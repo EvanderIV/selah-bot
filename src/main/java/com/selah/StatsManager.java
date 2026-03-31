@@ -16,6 +16,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import java.util.stream.Collectors;
+import java.util.Set;
+
 public class StatsManager {
 
     // A memory map holding the live statistics for every active server
@@ -186,6 +192,43 @@ public class StatsManager {
     private static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
     /**
+     * Removes channels from the statistics that no longer exist on the Discord server.
+     * This should be called once on startup to ensure data consistency.
+     * @param jda The JDA instance, used to fetch live channel data.
+     */
+    public static void synchronizeChannels(JDA jda) {
+        System.out.println("Running channel synchronization...");
+        for (String serverId : liveStats.keySet()) {
+            Guild guild = jda.getGuildById(serverId);
+            if (guild == null) {
+                System.out.println("WARN: Could not find guild with ID " + serverId + " during channel sync. It might have been removed.");
+                continue;
+            }
+
+            ServerStats stats = liveStats.get(serverId);
+            if (stats.channels == null || stats.channels.isEmpty()) {
+                continue; // No channels to sync for this server
+            }
+
+            // Get a set of current, valid channel IDs from the guild
+            Set<String> existingChannelIds = guild.getChannels().stream()
+                    .filter(c -> c instanceof TextChannel)
+                    .map(c -> c.getId())
+                    .collect(Collectors.toSet());
+
+            // Remove any channels from our stats that are not in the valid set
+            int originalSize = stats.channels.size();
+            boolean removed = stats.channels.removeIf(channel -> !existingChannelIds.contains(channel.channelId));
+            
+            if (removed) {
+                int newSize = stats.channels.size();
+                System.out.println("Synced channels for " + guild.getName() + ". Removed " + (originalSize - newSize) + " stale channel(s).");
+            }
+        }
+        System.out.println("Channel synchronization complete.");
+    }
+
+    /**
      * Loops through all loaded server configurations and assigns a custom timer 
      * to each one based on its specific save_interval setting.
      */
@@ -212,5 +255,30 @@ public class StatsManager {
         System.out.println("Shutting down! Forcing a final save of all live stats...");
         saveAllStats();
         scheduler.shutdown();
+    }
+
+    public static void updateChannelStats(String serverId, String channelId, String channelName, double heatIndex) {
+        ServerStats serverStats = liveStats.get(serverId);
+        if (serverStats == null) return;
+
+        ChannelStats channelStats = serverStats.channels.stream()
+                .filter(c -> c.channelId.equals(channelId))
+                .findFirst()
+                .orElse(null);
+
+        if (channelStats == null) {
+            channelStats = new ChannelStats(channelName, channelId);
+            serverStats.channels.add(channelStats);
+        }
+
+        // --- Update Metrics ---
+        serverStats.totalMessagesAnalyzed++;
+        
+        // Recalculate average heat
+        if (channelStats.averageHeatIndex == 0) {
+            channelStats.averageHeatIndex = heatIndex;
+        } else {
+            channelStats.averageHeatIndex = (channelStats.averageHeatIndex + heatIndex) / 2.0;
+        }
     }
 }

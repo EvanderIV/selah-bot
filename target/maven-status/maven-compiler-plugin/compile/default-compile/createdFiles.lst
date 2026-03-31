@@ -1,5 +1,6 @@
 com\selah\App$ModSettings.class
 com\selah\App$ConfigData.class
+com\selah\ModerationListener.class
 com\selah\StatsManager$ChannelStats.class
 com\selah\StatsManager$MemberStats.class
 com\selah\App$ServerNode.class

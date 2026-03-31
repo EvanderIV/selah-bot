@@ -15,6 +15,7 @@ import net.dv8tion.jda.api.requests.GatewayIntent;
 
 public class App {
 
+    public static boolean DEBUG_MODE = false;
     public static final String WORKING_DIRECTORY = "/home/evanm/Bots/selah-bot/";
 
     // --- 1. Java Object Mappings for Gson ---
@@ -41,6 +42,12 @@ public class App {
     public static final Map<String, ServerNode> guildConfigs = new HashMap<>();
 
     public static void main(String[] args) {
+        // Check for debug flag
+        if (args.length > 0 && "debug".equalsIgnoreCase(args[0])) {
+            DEBUG_MODE = true;
+            System.out.println("--- DEBUG MODE ENABLED ---");
+        }
+        
         // --- 3. Load and Parse the JSON ---
         loadConfigurations();
         StatsManager.loadServerStats(); // Get historical stats from disk into memory
@@ -51,16 +58,19 @@ public class App {
             System.err.println("ERROR: Please set the SELAH_DISCORD_TOKEN environment variable.");
             return;
         }
-        
+
         try {
             JDA jda = JDABuilder.createDefault(token)
                     .enableIntents(GatewayIntent.MESSAGE_CONTENT)
-                    // .addEventListeners(new ModerationListener()) 
+                    .addEventListeners(new ModerationListener()) 
                     .build()
                     .awaitReady();
 
             System.out.println("Selah Online. Logged in as " + jda.getSelfUser().getName());
             
+            // 0. Synchronize channels on startup
+            StatsManager.synchronizeChannels(jda);
+
             // 1. Kick off the background save timers
             StatsManager.startSaveTimers();
 
