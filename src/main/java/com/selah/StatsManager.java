@@ -81,7 +81,7 @@ public class StatsManager {
         
         for (App.ServerNode serverConfig : App.guildConfigs.values()) {
             String serverId = serverConfig.id;
-            Path filePath = Path.of(App.WORKING_DIRECTORY + "stats_" + serverId + ".json");
+            Path filePath = Path.of(App.WORKING_DIRECTORY + "server_stats/" + serverId + ".json");
             
             if (Files.exists(filePath)) {
                 try (Reader reader = Files.newBufferedReader(filePath)) {
@@ -119,7 +119,7 @@ public class StatsManager {
 
         // Using setPrettyPrinting makes the JSON readable in a text editor
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        Path filePath = Path.of("../stats_" + serverId + ".json");
+        Path filePath = Path.of(App.WORKING_DIRECTORY + "server_stats/" + serverId + ".json");
 
         try (Writer writer = Files.newBufferedWriter(filePath)) {
             gson.toJson(stats, writer);
