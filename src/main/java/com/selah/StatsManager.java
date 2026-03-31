@@ -33,6 +33,9 @@ public class StatsManager {
         
         // Array of individual channels
         public List<ChannelStats> channels = new ArrayList<>();
+        
+        // Array of individual members
+        public List<MemberStats> members = new ArrayList<>();
 
         public ServerStats(String serverName, String serverId) {
             this.serverName = serverName;
@@ -56,6 +59,17 @@ public class StatsManager {
         }
     }
 
+    public static class MemberStats {
+        public String memberName;
+        public String memberId;
+        public double averageHeatLevel = 0.0;
+
+        public MemberStats(String memberName, String memberId) {
+            this.memberName = memberName;
+            this.memberId = memberId;
+        }
+    }
+
     // --- 2. The File Loading/Writing Logic ---
 
     /**
@@ -76,6 +90,9 @@ public class StatsManager {
                     // Failsafe: If JSON was manually edited and channels array was deleted, prevent NullPointerExceptions
                     if (stats.channels == null) {
                         stats.channels = new ArrayList<>();
+                    }
+                    if (stats.members == null) {
+                        stats.members = new ArrayList<>();
                     }
                     
                     liveStats.put(serverId, stats);
@@ -118,6 +135,35 @@ public class StatsManager {
     public static void saveAllStats() {
         for (String serverId : liveStats.keySet()) {
             saveServerStats(serverId);
+        }
+    }
+
+    /**
+     * Updates a single member's heat level. If the member does not exist in the live stats, they will be created.
+     * @param serverId The ID of the server the member is in.
+     * @param memberId The ID of the member.
+     * @param memberName The display name of the member.
+     * @param heatLevel The heat level of the member's latest message.
+     */
+    public static void updateMemberHeatLevel(String serverId, String memberId, String memberName, double heatLevel) {
+        ServerStats serverStats = liveStats.get(serverId);
+        if (serverStats == null) return;
+
+        MemberStats memberStats = serverStats.members.stream()
+                .filter(m -> m.memberId.equals(memberId))
+                .findFirst()
+                .orElse(null);
+
+        if (memberStats == null) {
+            memberStats = new MemberStats(memberName, memberId);
+            serverStats.members.add(memberStats);
+        }
+
+        // Calculate a simple running average
+        if (memberStats.averageHeatLevel == 0) {
+            memberStats.averageHeatLevel = heatLevel;
+        } else {
+            memberStats.averageHeatLevel = (memberStats.averageHeatLevel + heatLevel) / 2.0;
         }
     }
 

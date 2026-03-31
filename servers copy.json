@@ -1,0 +1,15 @@
+{
+  "servers": [
+    {
+      "name": "Crispy's victims",
+      "id": "1399942629759783033",
+      "config": {
+        "save_interval": 5,
+        "enable_alerts": true,
+        "enable_warnings": true,
+        "slowmode_alerts": false,
+        "log_channel_id": "1487284081417912362"
+      }
+    }
+  ]
+}
