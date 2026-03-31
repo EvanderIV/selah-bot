@@ -255,6 +255,7 @@ public class StatsManager {
         System.out.println("Shutting down! Forcing a final save of all live stats...");
         saveAllStats();
         scheduler.shutdown();
+        System.out.println("Shutdown complete. Exiting.");
     }
 
     public static void updateChannelStats(String serverId, String channelId, String channelName, double heatIndex) {

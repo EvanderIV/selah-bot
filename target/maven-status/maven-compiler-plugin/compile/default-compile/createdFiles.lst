@@ -1,6 +1,7 @@
 com\selah\StatsManager$ChannelStats.class
 com\selah\StatsManager$MemberStats.class
 com\selah\App$ServerNode.class
+com\selah\MonitorManager.class
 com\selah\App.class
 com\selah\App$ModSettings.class
 com\selah\Keyword.class
@@ -11,3 +12,4 @@ com\selah\StatsManager$ServerStats.class
 com\selah\ArchiveManager.class
 com\selah\StatsManager.class
 com\selah\KeywordManager.class
+com\selah\MessageEmptyException.class

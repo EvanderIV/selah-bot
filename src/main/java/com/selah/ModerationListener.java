@@ -23,13 +23,20 @@ public class ModerationListener extends ListenerAdapter {
         String memberName = event.getAuthor().getName();
 
         // 1. Calculate the heat of the message
-        double heatIndex = getHeatIndex(event);
+        try {
+            double heatIndex = getHeatIndexFromEvent(event);
 
-        // 2. Update the channel's running statistics
-        StatsManager.updateChannelStats(serverId, channelId, channelName, heatIndex);
-        
-        // 3. Update the member's running statistics
-        StatsManager.updateMemberHeatLevel(serverId, memberId, memberName, heatIndex);
+            // 2. Update the channel's running statistics
+            StatsManager.updateChannelStats(serverId, channelId, channelName, heatIndex);
+            
+            // 3. Update the member's running statistics
+            StatsManager.updateMemberHeatLevel(serverId, memberId, memberName, heatIndex);
+        } catch (MessageEmptyException e) {
+            if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG] Skipping heat calculation: " + e.getMessage());
+            }
+            return; // Skip processing if message is empty after URL stripping
+        }
     }
 
     /**
@@ -38,11 +45,16 @@ public class ModerationListener extends ListenerAdapter {
      * @param event The message event containing all context.
      * @return A score from 0.0 to 1.0.
      */
-    private double getHeatIndex(MessageReceivedEvent event) {
+    private double getHeatIndexFromEvent(MessageReceivedEvent event) throws MessageEmptyException {
         String originalMessage = event.getMessage().getContentRaw();
         
         // Strip URLs from the message before analysis
-        String messageForAnalysis = originalMessage.replaceAll("https?://\\S+", "");
+        String messageForAnalysis = originalMessage.replaceAll("https?://\\S+", "").trim();
+
+        // If the message is empty after stripping URLs, return 0 heat
+        if (messageForAnalysis.isEmpty()) {
+            throw new MessageEmptyException("Message is empty after URL stripping.");
+        }
 
         if (App.DEBUG_MODE) {
             String author = event.getAuthor().getName();
@@ -59,24 +71,33 @@ public class ModerationListener extends ListenerAdapter {
             }
         }
 
-        double heat = 0;
-        heat += checkKeywords(messageForAnalysis);
-        heat += checkCapitalization(messageForAnalysis);
-        heat += checkMessageLength(messageForAnalysis);
-        heat += checkPunctuation(messageForAnalysis);
-
-        double finalHeat = Math.min(1.0, heat); // Cap the heat at 1.0
-        finalHeat = Math.round(finalHeat * 1000.0) / 1000.0;
+        double heat = getHeatIndex(messageForAnalysis);
 
         if (App.DEBUG_MODE) {
-            System.out.println("[DEBUG] Final Heat Index: " + String.format("%.3f", finalHeat));
+            System.out.println("[DEBUG] Final Heat Index: " + String.format("%.3f", heat));
             System.out.println("[DEBUG] -------------------------------\n");
         }
 
-        return finalHeat;
+        return heat;
     }
 
-    private double checkKeywords(String message) {
+    public static double getHeatIndex(String message) {
+
+        double heat = 0;
+        heat += checkKeywords(message);
+        heat += checkCapitalization(message);
+        heat += checkMessageLength(message);
+        heat += checkPunctuation(message);
+
+        if (App.DEBUG_MODE) {
+            System.out.println("[DEBUG] Final Heat Index: " + String.format("%.3f", heat));
+            System.out.println("[DEBUG] -------------------------------\n");
+        }
+
+        return heat;
+    }
+
+    private static double checkKeywords(String message) {
         double heat = 0;
         List<Keyword> foundKeywords = new ArrayList<>();
         List<Keyword> foundSafeWords = new ArrayList<>();
@@ -144,7 +165,7 @@ public class ModerationListener extends ListenerAdapter {
         return heat;
     }
 
-    private double checkCapitalization(String message) {
+    private static double checkCapitalization(String message) {
         long upperCaseChars = message.chars().filter(Character::isUpperCase).count();
         long totalLetters = message.chars().filter(Character::isLetter).count();
         double upperCaseRatio = totalLetters == 0 ? 0 : (double) upperCaseChars / totalLetters;
@@ -158,7 +179,7 @@ public class ModerationListener extends ListenerAdapter {
         return 0;
     }
 
-    private double checkMessageLength(String message) {
+    private static double checkMessageLength(String message) {
         if (message.length() > 500) {
             if (App.DEBUG_MODE) System.out.println("[DEBUG] Excessive length (" + message.length() + " chars) (+0.2)");
             return 0.2;
@@ -166,7 +187,7 @@ public class ModerationListener extends ListenerAdapter {
         return 0;
     }
 
-    private double checkPunctuation(String message) {
+    private static double checkPunctuation(String message) {
         double heat = 0;
         
         // --- 1. Check for sentence-ending periods ---
@@ -216,7 +237,7 @@ public class ModerationListener extends ListenerAdapter {
      * @param message The raw message content.
      * @return A normalized string.
      */
-    private String normalizeForKeywordCheck(String message) {
+    private static String normalizeForKeywordCheck(String message) {
         return message.toLowerCase()
                 .replace("'", "") // Remove apostrophes
                 .replace('0', 'o')

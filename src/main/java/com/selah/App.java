@@ -54,8 +54,25 @@ public class App {
     public static final Map<String, ServerNode> guildConfigs = new HashMap<>();
 
     public static void main(String[] args) {
+
+        if (args.length > 1 && ("--check".equalsIgnoreCase(args[0]) || "-c".equalsIgnoreCase(args[0]))) {
+            DEBUG_MODE = true;
+            KeywordManager.loadKeywords(); // Load keywords from JSON
+            System.out.println("--- OFFLINE: THIS SESSION IS NOT RECORDED ---");
+            ModerationListener.getHeatIndex(args[1]);
+            return;
+        }
+
+        if (args.length > 1 && ("--get".equalsIgnoreCase(args[0]) || "-g".equalsIgnoreCase(args[0]))) {
+            DEBUG_MODE = true;
+            KeywordManager.loadKeywords(); // Load keywords from JSON
+            System.out.println("--- OFFLINE: THIS SESSION IS NOT RECORDED ---");
+            ModerationListener.getHeatIndex(args[1]);
+            return;
+        }
+
         // Check for debug flag
-        if (args.length > 0 && "debug".equalsIgnoreCase(args[0])) {
+        if (args.length > 0 && ("--debug".equalsIgnoreCase(args[0]) || "-d".equalsIgnoreCase(args[0]))) {
             DEBUG_MODE = true;
             System.out.println("--- DEBUG MODE ENABLED ---");
         }
@@ -90,6 +107,39 @@ public class App {
                 jda.shutdown();
                 System.out.println("Shutdown complete. Exiting.");
                 return;
+            }
+
+            // Monitor mode: displays live channel or user statistics
+            if (args.length > 1 && ("--monitor".equalsIgnoreCase(args[0]) || "-m".equalsIgnoreCase(args[0]))) {
+                String monitorType = args[1].toLowerCase();
+                if (!monitorType.equals("channels") && !monitorType.equals("users")) {
+                    System.err.println("ERROR: Monitor type must be 'channels' or 'users'");
+                    jda.shutdown();
+                    return;
+                }
+                
+                // Find the first server to monitor (you can later extend this to accept server ID as arg)
+                if (guildConfigs.isEmpty()) {
+                    System.err.println("ERROR: No servers configured to monitor");
+                    jda.shutdown();
+                    return;
+                }
+                
+                String serverId = guildConfigs.keySet().iterator().next();
+                System.out.println("Starting monitor mode for '" + monitorType + "'...");
+                System.out.println("Waiting for messages to be processed...");
+                
+                // Start the monitor in a background thread
+                MonitorManager.startMonitor(serverId, monitorType);
+                
+                // Add shutdown hook for monitor
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                    System.out.println("\nStopping monitor...");
+                    MonitorManager.stopMonitor();
+                    StatsManager.shutdownGracefully();
+                }));
+                
+                return; // Keep JDA running in the background
             }
             
             // 0. Synchronize channels on startup
