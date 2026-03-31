@@ -15,7 +15,7 @@ import net.dv8tion.jda.api.requests.GatewayIntent;
 
 public class App {
 
-    public static final String WORKING_DIRECTORY = "home/evanm/Bots/selah-bot/";
+    public static final String WORKING_DIRECTORY = "/home/evanm/Bots/selah-bot/";
 
     // --- 1. Java Object Mappings for Gson ---
     // These classes strictly mirror the structure of servers.json
