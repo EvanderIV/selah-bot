@@ -1,0 +1,30 @@
+{
+    "keywords": [
+        { "word": "hate", "heat": 0.4 },
+        { "word": "stupid", "heat": 0.3 },
+        { "word": "idiot", "heat": 0.3 },
+        { "word": "dumb", "heat": 0.25 },
+        { "word": "moron", "heat": 0.5 },
+        { "word": "fool", "heat": 0.5 },
+        { "word": "shut up", "heat": 0.3 },
+        { "word": "suck", "heat": 0.2 },
+        { "word": "stfu", "heat": 1.2 },
+        { "word": "kill yourself", "heat": 1.5 },
+        { "word": "kill urself", "heat": 1.5 },
+        { "word": "kys", "heat": 1.5 },
+        { "word": "retard", "heat": 0.4 },
+        { "word": "nigger", "heat": 2.0 },
+        { "word": "nigga", "heat": 2.0 },
+        { "word": "dumbass", "heat": 0.3 },
+        { "word": "asshole", "heat": 0.4 },
+        { "word": "bitch", "heat": 0.5 },
+        { "word": "slut", "heat": 0.4 },
+        { "word": "whore", "heat": 0.3 }
+    ],
+    "safeWords": [
+        { "word": "dont kill yourself", "heat": -1.5 },
+        { "word": "dont kill urself", "heat": -1.5 },
+        { "word": "dont kys", "heat": -1.5 },
+        { "word": "whore test", "heat": -0.3 }
+    ]
+}

@@ -16,7 +16,19 @@ import net.dv8tion.jda.api.requests.GatewayIntent;
 public class App {
 
     public static boolean DEBUG_MODE = false;
-    public static final String WORKING_DIRECTORY = "/home/evanm/Bots/selah-bot/";
+    public static final String WORKING_DIRECTORY = getWorkingDirectory();
+
+    private static String getWorkingDirectory() {
+        try {
+            String hostname = java.net.InetAddress.getLocalHost().getHostName();
+            if ("evanos".equalsIgnoreCase(hostname)) {
+                return "C:/Users/evanm/Documents/selah-bot/";
+            }
+        } catch (java.net.UnknownHostException e) {
+            System.err.println("Could not determine hostname, defaulting to Linux path.");
+        }
+        return "/home/evanm/Bots/selah-bot/";
+    }
 
     // --- 1. Java Object Mappings for Gson ---
     // These classes strictly mirror the structure of servers.json
@@ -50,6 +62,7 @@ public class App {
         
         // --- 3. Load and Parse the JSON ---
         loadConfigurations();
+        KeywordManager.loadKeywords(); // Load keywords from JSON
         StatsManager.loadServerStats(); // Get historical stats from disk into memory
 
         // --- 4. Initialize the Bot ---
