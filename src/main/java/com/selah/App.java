@@ -112,8 +112,8 @@ public class App {
             // Monitor mode: displays live channel or user statistics
             if (args.length > 1 && ("--monitor".equalsIgnoreCase(args[0]) || "-m".equalsIgnoreCase(args[0]))) {
                 String monitorType = args[1].toLowerCase();
-                if (!monitorType.equals("channels") && !monitorType.equals("users")) {
-                    System.err.println("ERROR: Monitor type must be 'channels' or 'users'");
+                if (!monitorType.equals("channels") && !monitorType.equals("users") && !monitorType.equals("unified")) {
+                    System.err.println("ERROR: Monitor type must be 'channels', 'users', or 'unified'");
                     jda.shutdown();
                     return;
                 }

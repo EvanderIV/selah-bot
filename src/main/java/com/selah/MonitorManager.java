@@ -73,6 +73,8 @@ public class MonitorManager {
             buildChannelMonitor(stats, output);
         } else if ("users".equalsIgnoreCase(monitorType)) {
             buildUserMonitor(stats, output);
+        } else if ("unified".equalsIgnoreCase(monitorType)) {
+            buildUnifiedMonitor(stats, output);
         } else {
             output.append("ERROR: Invalid monitor type. Use 'channels' or 'users'.\n");
         }
@@ -85,6 +87,57 @@ public class MonitorManager {
         
         System.out.print(output.toString());
         System.out.flush();
+    }
+
+    private static void buildUnifiedMonitor(StatsManager.ServerStats stats, StringBuilder output) {
+        if ((stats.channels == null || stats.channels.isEmpty()) && (stats.members == null || stats.members.isEmpty())) {
+            output.append("No channels or user data available yet.\n");
+            return;
+        }
+
+        List<StatsManager.ChannelStats> sortedChannels = stats.channels.stream()
+                .sorted((a, b) -> Double.compare(a.averageHeatIndex, b.averageHeatIndex))
+                .collect(Collectors.toList());
+
+        List<StatsManager.MemberStats> sortedUsers = stats.members.stream()
+                .sorted((a, b) -> Double.compare(a.averageHeatLevel, b.averageHeatLevel))
+                .collect(Collectors.toList());
+
+        // Adjusted formatting strings for alignment
+        String headerFormat = "%-65s|%-65s\n";
+        String subHeaderFormat = "%-30s %11s %-22s|%-30s %18s %-23s\n";
+        String lineFormat = "%-65s|%-65s\n";
+        String separator = "─".repeat(65) + "|" + "─".repeat(65) + "\n";
+
+        output.append(String.format(headerFormat, "CHANNELS", " USERS"));
+        output.append(String.format(subHeaderFormat, "Channel", "Avg Heat", "", " User", "Avg Heat Level", ""));
+        output.append(separator);
+
+        int maxRows = Math.max(sortedChannels.size(), sortedUsers.size());
+
+        for (int i = 0; i < maxRows; i++) {
+            String channelLine = "";
+            if (i < sortedChannels.size()) {
+                StatsManager.ChannelStats channel = sortedChannels.get(i);
+                String heatBar = generateHeatBar(channel.averageHeatIndex);
+                channelLine = String.format("#%-29s %8.3f   %s",
+                        channel.channelName,
+                        channel.averageHeatIndex,
+                        heatBar);
+            }
+
+            String userLine = "";
+            if (i < sortedUsers.size()) {
+                StatsManager.MemberStats member = sortedUsers.get(i);
+                String heatBar = generateHeatBar(member.averageHeatLevel);
+                userLine = String.format(" %-30s %8.3f   %s",
+                        member.memberName,
+                        member.averageHeatLevel,
+                        heatBar);
+            }
+
+            output.append(String.format(lineFormat, channelLine, userLine));
+        }
     }
 
     private static void buildChannelMonitor(StatsManager.ServerStats stats, StringBuilder output) {
