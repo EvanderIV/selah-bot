@@ -17,6 +17,7 @@
         { "word": "you are regarded", "heat": 1.6 },
         { "word": "nigger", "heat": 2.0 },
         { "word": "nigga", "heat": 2.0 },
+        { "word": "negga", "heat": 2.0 },
         { "word": "dumbass", "heat": 0.3 },
         { "word": "asshole", "heat": 0.4 },
         { "word": "bitch", "heat": 0.5 },

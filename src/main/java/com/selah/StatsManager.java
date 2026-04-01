@@ -69,6 +69,15 @@ public class StatsManager {
         public String memberName;
         public String memberId;
         public double averageHeatLevel = 0.0;
+        public double recordHighHeat = 0.0;
+
+        public int moderateHeatMessages = 0;
+        public double moderateHeatAverage = 0.0;
+
+        public int highHeatMessages = 0;
+        public double highHeatAverage = 0.0;
+
+        public int extremeHeatMessages = 0;
 
         public MemberStats(String memberName, String memberId) {
             this.memberName = memberName;
@@ -183,6 +192,36 @@ public class StatsManager {
             memberStats.averageHeatLevel = heatLevel;
         } else {
             memberStats.averageHeatLevel = (memberStats.averageHeatLevel + heatLevel) / 2.0;
+        }
+
+        if (heatLevel > memberStats.recordHighHeat) {
+            memberStats.recordHighHeat = heatLevel;
+        }
+
+        if (heatLevel > 1.4) {
+            memberStats.extremeHeatMessages++;
+        } else if (heatLevel > 0.8) {
+            memberStats.highHeatMessages++;
+            if (memberStats.highHeatAverage == 0) {
+                memberStats.highHeatAverage = heatLevel;
+            } else {
+                if (heatLevel > memberStats.highHeatAverage) {
+                    memberStats.highHeatAverage = (0.75 * heatLevel) + (0.25 * memberStats.highHeatAverage);
+                } else {
+                    memberStats.highHeatAverage = (memberStats.highHeatAverage + heatLevel) / 2.0;
+                }
+            }
+        } else if (heatLevel > 0.3) {
+            memberStats.moderateHeatMessages++;
+            if (memberStats.moderateHeatAverage == 0) {
+                memberStats.moderateHeatAverage = heatLevel;
+            } else {
+                if (heatLevel > memberStats.moderateHeatAverage) {
+                    memberStats.moderateHeatAverage = (0.75 * heatLevel) + (0.25 * memberStats.moderateHeatAverage);
+                } else {
+                    memberStats.moderateHeatAverage = (memberStats.moderateHeatAverage + heatLevel) / 2.0;
+                }
+            }
         }
     }
 
