@@ -46,13 +46,16 @@
         { "word": "i didnt say that", "heat": 0.2 },
         { "word": "i never said that", "heat": 0.15 },
         { "word": "serious", "heat": 0.1 },
-        { "word": "molest", "heat": 1.0 }
+        { "word": "molest", "heat": 1.0 },
+        { "word": "gook", "heat": 0.2 },
+        { "word": "goy", "heat": 0.05 }
     ],
     "safeWords": [
         { "word": "dont kill yourself", "heat": -1.5 },
         { "word": "dont kill urself", "heat": -1.5 },
         { "word": "dont kys", "heat": -1.5 },
         { "word": "whore test", "heat": -0.5 },
-        { "word": "i love you", "heat": -1.0 }
+        { "word": "i love you", "heat": -1.0 },
+        { "word": "the fuck you", "heat": -0.3 }
     ]
 }
