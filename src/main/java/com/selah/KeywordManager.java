@@ -33,6 +33,7 @@ public class KeywordManager {
 
         if (!Files.exists(keywordPath)) {
             System.err.println("CRITICAL: keywords.json not found. The bot will run, but no keywords will be loaded.");
+            System.err.println("(Could not find at: \"" + App.WORKING_DIRECTORY + "keywords.json\" or \"" + System.getProperty("user.dir") + "/keywords.json\")");
             return;
         }
 
