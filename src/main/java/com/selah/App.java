@@ -160,9 +160,16 @@ public class App {
 
     /**
      * Reads servers.json and populates the guildConfigs HashMap.
+     * First checks the current working directory, then falls back to WORKING_DIRECTORY.
      */
     private static void loadConfigurations() {
-        Path configPath = Path.of(WORKING_DIRECTORY + "servers.json");
+        // Try current working directory first
+        Path configPath = Path.of(System.getProperty("user.dir") + "/servers.json");
+        
+        // Fall back to WORKING_DIRECTORY if not found
+        if (!Files.exists(configPath)) {
+            configPath = Path.of(WORKING_DIRECTORY + "servers.json");
+        }
         
         if (!Files.exists(configPath)) {
             System.err.println("WARNING: servers.json not found. (\"" + WORKING_DIRECTORY + " servers.json\") The bot will run, but with no active configs.");

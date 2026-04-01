@@ -20,9 +20,16 @@ public class KeywordManager {
 
     /**
      * Loads the keywords and safe words from the external JSON file.
+     * First checks the current working directory, then falls back to App.WORKING_DIRECTORY.
      */
     public static void loadKeywords() {
-        Path keywordPath = Path.of(App.WORKING_DIRECTORY + "keywords.json");
+        // Try current working directory first
+        Path keywordPath = Path.of(System.getProperty("user.dir") + "/keywords.json");
+        
+        // Fall back to App.WORKING_DIRECTORY if not found
+        if (!Files.exists(keywordPath)) {
+            keywordPath = Path.of(App.WORKING_DIRECTORY + "keywords.json");
+        }
 
         if (!Files.exists(keywordPath)) {
             System.err.println("CRITICAL: keywords.json not found. The bot will run, but no keywords will be loaded.");
@@ -36,7 +43,7 @@ public class KeywordManager {
             if (keywordFile != null) {
                 if (keywordFile.keywords != null) {
                     keywords = keywordFile.keywords;
-                    System.out.println("Successfully loaded " + keywords.size() + " keywords.");
+                    System.out.println("Successfully loaded " + keywords.size() + " keywords from: " + keywordPath);
                 }
                 if (keywordFile.safeWords != null) {
                     safeWords = keywordFile.safeWords;
