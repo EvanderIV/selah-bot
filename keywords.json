@@ -3,7 +3,7 @@
         { "word": "hate", "heat": 0.1 },
         { "word": "stupid", "heat": 0.2 },
         { "word": "idiot", "heat": 0.3 },
-        { "word": "dumb", "heat": 0.25 },
+        { "word": "dumb", "heat": 0.15 },
         { "word": "moron", "heat": 0.3 },
         { "word": "fool", "heat": 0.3 },
         { "word": "shut up", "heat": 0.4 },

@@ -281,6 +281,7 @@ public class StatsManager {
             // Schedule the repeating task
             scheduler.scheduleAtFixedRate(() -> {
                 saveServerStats(server.id);
+                if (App.DEBUG_MODE) System.out.println("Auto-saved stats for " + server.name + " at " + java.time.LocalTime.now());
             }, interval, interval, TimeUnit.MINUTES);
             
             System.out.println("Started save timer for " + server.name + " (Every " + interval + " mins)");
