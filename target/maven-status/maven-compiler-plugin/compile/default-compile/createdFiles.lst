@@ -14,6 +14,7 @@ com\selah\OCRProcessor.class
 com\selah\StatsManager$ServerStats.class
 com\selah\ArchiveManager.class
 com\selah\StatsManager.class
+com\selah\ModerationListener$1.class
 com\selah\KeywordManager.class
 com\selah\MessageEmptyException.class
 com\selah\StatsManager$MemberRelation.class

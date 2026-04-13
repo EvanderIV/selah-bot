@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.time.LocalDateTime;
 
 import com.google.gson.Gson;
@@ -65,6 +66,7 @@ public class App {
         public String log_channel_id;
         public String alert_channel_id;
         public String warning_channel_id;
+        public long alert_cooldown_seconds = 60; // Default: 60 seconds
         public int save_interval = 5;
         public List<String> banned_words;
     }
@@ -191,6 +193,14 @@ public class App {
         if (args.length > 1 && ("--test-alerts".equalsIgnoreCase(args[0]) || "-t".equalsIgnoreCase(args[0]))) {
             System.out.println("--- TEST MODE: ALERT AND WARNING SYSTEM ---");
             handleTestMode(args);
+            return;
+        }
+
+        if (args.length > 1 && ("--analyze-archive".equalsIgnoreCase(args[0]) || "-aa".equalsIgnoreCase(args[0]))) {
+            System.out.println("--- ARCHIVE ANALYSIS MODE ---");
+            DEBUG_MODE = true;
+            KeywordManager.loadKeywords();
+            handleArchiveAnalysis(args);
             return;
         }
 
@@ -412,6 +422,7 @@ public class App {
 
             System.out.println("\n=== TESTING ALERT AND WARNING SYSTEM ===");
             System.out.println("Server: " + serverConfig.name + " (ID: " + serverId + ")");
+            System.out.println("Alert Cooldown: " + serverConfig.config.alert_cooldown_seconds + " seconds");
 
             // Test Alert Channel
             if (serverConfig.config.alert_channel_id != null && !serverConfig.config.alert_channel_id.isEmpty()) {
@@ -485,5 +496,193 @@ public class App {
             System.err.println("ERROR during test mode: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Analyzes an archive file by parsing messages, calculating heat, and simulating channel heat.
+     * Outputs statistics and an ASCII line graph of simulated channel heat over time.
+     * 
+     * @param args Command-line arguments. args[1] should be the path to the archive file.
+     */
+    private static void handleArchiveAnalysis(String[] args) {
+        if (args.length < 2) {
+            System.err.println("ERROR: Archive file path required. Usage: java -jar bot.jar -aa <archive_file_path>");
+            return;
+        }
+
+        Path archivePath = Path.of(args[1]);
+        if (!Files.exists(archivePath)) {
+            System.err.println("ERROR: Archive file not found: " + archivePath.toAbsolutePath());
+            return;
+        }
+
+        try {
+            List<String> lines = Files.readAllLines(archivePath);
+            List<Double> heatValues = new ArrayList<>();
+            double simulatedChannelHeat = 0.0;
+            double maxHeat = 0.0;
+
+            System.out.println("Analyzing archive: " + archivePath.getFileName());
+            System.out.println("Total messages: " + lines.size());
+            System.out.println("Processing...\n");
+
+            // Parse each message and calculate heat
+            for (String line : lines) {
+                // Parse format: [YYYY-MM-DD HH:MM:SS] username: message
+                if (!line.contains("] ") || !line.contains(": ")) {
+                    continue;
+                }
+
+                int closeIdx = line.indexOf("] ");
+                int colonIdx = line.indexOf(": ");
+                if (closeIdx == -1 || colonIdx == -1 || colonIdx <= closeIdx) {
+                    continue;
+                }
+
+                String message = line.substring(colonIdx + 2);
+                double messageHeat = ModerationListener.getHeatIndex(message);
+
+                // Simulate channel heat using the same rolling average logic
+                if (simulatedChannelHeat == 0.0) {
+                    simulatedChannelHeat = messageHeat;
+                } else {
+                    if (messageHeat > simulatedChannelHeat) {
+                        simulatedChannelHeat = (0.75 * messageHeat) + (0.25 * simulatedChannelHeat);
+                    } else {
+                        simulatedChannelHeat = (0.50 * simulatedChannelHeat) + (0.50 * messageHeat);
+                    }
+                }
+
+                heatValues.add(simulatedChannelHeat);
+                if (simulatedChannelHeat > maxHeat) {
+                    maxHeat = simulatedChannelHeat;
+                }
+            }
+
+            if (heatValues.isEmpty()) {
+                System.err.println("ERROR: No valid messages found in archive.");
+                return;
+            }
+
+            // Calculate statistics
+            double avgHeat = heatValues.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+            double medianHeat = calculateMedian(heatValues);
+            double stdDev = calculateStdDev(heatValues, avgHeat);
+            double lowerQuartile = calculateQuartile(heatValues, 0.25);
+            double upperQuartile = calculateQuartile(heatValues, 0.75);
+
+            // Output statistics
+            System.out.println("\n=== ARCHIVE ANALYSIS STATISTICS ===");
+            System.out.println("Total Messages Analyzed: " + heatValues.size());
+            System.out.println(String.format("Average Heat: %.4f", avgHeat));
+            System.out.println(String.format("Median Heat: %.4f", medianHeat));
+            System.out.println(String.format("Standard Deviation: %.4f", stdDev));
+            System.out.println(String.format("Lower Quartile (Q1): %.4f", lowerQuartile));
+            System.out.println(String.format("Upper Quartile (Q3): %.4f", upperQuartile));
+            System.out.println(String.format("Record High Heat: %.4f", maxHeat));
+            System.out.println(String.format("Interquartile Range: %.4f\n", upperQuartile - lowerQuartile));
+
+            // Generate and display ASCII line graph
+            System.out.println("=== SIMULATED CHANNEL HEAT GRAPH ===");
+            displayLineGraph(heatValues, maxHeat);
+
+        } catch (Exception e) {
+            System.err.println("ERROR analyzing archive: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Displays an ASCII line graph of heat values over message count.
+     */
+    private static void displayLineGraph(List<Double> heatValues, double maxHeat) {
+        int graphHeight = 20;
+        int graphWidth = Math.min(100, heatValues.size());
+        
+        // Sample data if too many messages
+        List<Double> sampledHeat = new ArrayList<>();
+        if (heatValues.size() <= graphWidth) {
+            sampledHeat = new ArrayList<>(heatValues);
+        } else {
+            int step = heatValues.size() / graphWidth;
+            for (int i = 0; i < heatValues.size(); i += step) {
+                sampledHeat.add(heatValues.get(i));
+            }
+        }
+
+        // Create graph matrix
+        char[][] graph = new char[graphHeight][sampledHeat.size()];
+        for (int i = 0; i < graphHeight; i++) {
+            for (int j = 0; j < sampledHeat.size(); j++) {
+                graph[i][j] = ' ';
+            }
+        }
+
+        // Plot points
+        for (int i = 0; i < sampledHeat.size(); i++) {
+            int row = (int) ((1.0 - (sampledHeat.get(i) / maxHeat)) * (graphHeight - 1));
+            row = Math.max(0, Math.min(graphHeight - 1, row));
+            graph[row][i] = '●';
+        }
+
+        // Display graph with axis labels
+        System.out.println("Heat  │");
+        for (int i = 0; i < graphHeight; i++) {
+            if (i % (Math.max(1, graphHeight / 5)) == 0) {
+                double heatLabel = maxHeat * (1.0 - (double) i / graphHeight);
+                System.out.printf("%5.2f │", heatLabel);
+            } else {
+                System.out.print("      │");
+            }
+            
+            for (int j = 0; j < sampledHeat.size(); j++) {
+                System.out.print(graph[i][j]);
+            }
+            System.out.println();
+        }
+
+        // X-axis
+        System.out.print("      └");
+        for (int i = 0; i < sampledHeat.size(); i++) {
+            System.out.print("─");
+        }
+        System.out.println();
+        System.out.println("       0" + String.format("%" + (sampledHeat.size() - 2) + "s", (sampledHeat.size() - 1)) + " (Message #)");
+    }
+
+    /**
+     * Calculate median of a list of values.
+     */
+    private static double calculateMedian(List<Double> values) {
+        List<Double> sorted = new ArrayList<>(values);
+        sorted.sort(Double::compareTo);
+        
+        if (sorted.size() % 2 == 0) {
+            return (sorted.get(sorted.size() / 2 - 1) + sorted.get(sorted.size() / 2)) / 2.0;
+        } else {
+            return sorted.get(sorted.size() / 2);
+        }
+    }
+
+    /**
+     * Calculate standard deviation of a list of values.
+     */
+    private static double calculateStdDev(List<Double> values, double mean) {
+        double variance = values.stream()
+                .mapToDouble(v -> Math.pow(v - mean, 2))
+                .average()
+                .orElse(0.0);
+        return Math.sqrt(variance);
+    }
+
+    /**
+     * Calculate quartile (Q1=0.25, Q3=0.75) of a list of values.
+     */
+    private static double calculateQuartile(List<Double> values, double quartile) {
+        List<Double> sorted = new ArrayList<>(values);
+        sorted.sort(Double::compareTo);
+        
+        int index = (int) (quartile * (sorted.size() - 1));
+        return sorted.get(index);
     }
 }

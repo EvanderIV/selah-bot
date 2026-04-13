@@ -22,6 +22,16 @@ public class ModerationListener extends ListenerAdapter {
 
     // Static map to define affection point ratings for specific patterns
     private static final Map<String, Double> AFFECTION_PATTERNS = new LinkedHashMap<>();
+    
+    // Static map to track the last time an alert was sent per channel
+    // Key format: "serverId:channelId"
+    private static final Map<String, Long> lastAlertTime = new HashMap<>();
+    
+    // Static map to track recent channel heat values for sustained heat detection
+    // Key format: "serverId:channelId", Value is a LinkedHashMap of timestamps to heat values
+    private static final Map<String, LinkedHashMap<Long, Double>> recentChannelHeats = new HashMap<>();
+    private static final int MAX_HEAT_HISTORY = 10; // Track last 10 messages for sustained heat detection
+    private static final double SUSTAINED_HEAT_THRESHOLD = 1.0; // Average must be at least this for sustained status
 
     static {
         AFFECTION_PATTERNS.put("Y[EA]S+", 0.15); // Case-sensitive match for "YES" followed by any number of 's'
@@ -393,6 +403,7 @@ public class ModerationListener extends ListenerAdapter {
         heat += checkCapitalization(message);
         heat += checkMessageLength(message);
         heat += checkPunctuation(message);
+        heat += checkDebatePatterns(message);
 
         heat = Math.max(0, heat);
 
@@ -478,16 +489,16 @@ public class ModerationListener extends ListenerAdapter {
 
         if (message.length() > 25 && upperCaseRatio > 0.04 && upperCaseRatio < 0.4) {
             if (App.DEBUG_MODE) System.out.println("[DEBUG] Standard caps detected (" + String.format("%.2f", upperCaseRatio * 100) + "%) (+0.2)");
-            return 0.3;
+            return 0.2;
         } else if (message.length() > 15 && upperCaseRatio > 0.08 && upperCaseRatio < 0.4) {
             if (App.DEBUG_MODE) System.out.println("[DEBUG] Standard caps detected on short string (" + String.format("%.2f", upperCaseRatio * 100) + "%) (+0.1)");
-            return 0.3;
+            return 0.1;
         } else if (upperCaseRatio > 0.7) {
             if (App.DEBUG_MODE) System.out.println("[DEBUG] Casually excessive caps detected (" + String.format("%.2f", upperCaseRatio * 100) + "%) (-0.2)");
-            return -0.3;
+            return -0.2;
         } else if (upperCaseRatio <= 0.0) {
             if (App.DEBUG_MODE) System.out.println("[DEBUG] Casually minimal caps detected (" + String.format("%.2f", upperCaseRatio * 100) + "%) (-0.2)");
-            return -0.3;
+            return -0.2;
         } else if (App.DEBUG_MODE) {
             System.out.println("[DEBUG] Capitalization: " + String.format("%.2f", upperCaseRatio * 100) + "%");
         }
@@ -495,9 +506,15 @@ public class ModerationListener extends ListenerAdapter {
     }
 
     private static double checkMessageLength(String message) {
-        if (message.length() > 500) {
-            if (App.DEBUG_MODE) System.out.println("[DEBUG] Excessive length (" + message.length() + " chars) (+0.2)");
-            return 0.2;
+        if (message.length() > 2000) {
+            if (App.DEBUG_MODE) System.out.println("[DEBUG] Excessive length (" + message.length() + " chars, extreme spam indicator) (+0.3)");
+            return 0.3;
+        } else if (message.length() > 500) {
+            if (App.DEBUG_MODE) System.out.println("[DEBUG] Very long message (" + message.length() + " chars, likely debate) (+0.05)");
+            return 0.05; // Longer messages are usually debate/discussion, only slight boost
+        } else if (message.length() > 300) {
+            if (App.DEBUG_MODE) System.out.println("[DEBUG] Long message (" + message.length() + " chars) (+0.02)");
+            return 0.02;
         }
         return 0;
     }
@@ -563,6 +580,75 @@ public class ModerationListener extends ListenerAdapter {
      * @param message The raw message content.
      * @return A normalized string.
      */
+    /**
+     * Detects debate-related patterns: question density, conditionals, citations, and structured responses.
+     * Adds heat to messages that show debate characteristics.
+     */
+    private static double checkDebatePatterns(String message) {
+        double heat = 0;
+        
+        // --- 1. Question density ---
+        long questionCount = message.chars().filter(ch -> ch == '?').count();
+        if (questionCount > 0) {
+            // More questions = more debate-like
+            double questionHeat = Math.min(0.2, questionCount * 0.08);
+            heat += questionHeat;
+            if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG] Detected " + questionCount + " question(s) (+" + String.format("%.3f", questionHeat) + ")");
+            }
+        }
+        
+        // --- 2. Conditional language ---
+        String lowerMsg = message.toLowerCase();
+        long conditionalCount = 0;
+        String[] conditionals = {"if ", " then ", " would ", " could ", " should ", " might ", " may "};
+        for (String conditional : conditionals) {
+            conditionalCount += countOccurrences(lowerMsg, conditional);
+        }
+        
+        if (conditionalCount > 0) {
+            double conditionalHeat = Math.min(0.15, conditionalCount * 0.05);
+            heat += conditionalHeat;
+            if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG] Detected " + conditionalCount + " conditional phrase(s) (+" + String.format("%.3f", conditionalHeat) + ")");
+            }
+        }
+        
+        // --- 3. Long, structured response (multiple sentences) ---
+        long sentenceCount = message.chars().filter(ch -> ch == '.' || ch == '?' || ch == '!').count();
+        if (sentenceCount > 2 && message.length() > 80) {
+            heat += 0.1;
+            if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG] Multi-sentence structured response (" + sentenceCount + " sentences) (+0.1)");
+            }
+        }
+        
+        // --- 4. Citation/quote patterns ---
+        long quoteCount = message.chars().filter(ch -> ch == '"').count();
+        if (quoteCount >= 2) {
+            heat += 0.1;
+            if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG] Detected quotes/citations (+0.1)");
+            }
+        }
+        
+        return heat;
+    }
+
+    /**
+     * Helper method to count occurrences of a substring in a string.
+     */
+    private static long countOccurrences(String text, String substring) {
+        if (substring.isEmpty()) return 0;
+        long count = 0;
+        int index = 0;
+        while ((index = text.indexOf(substring, index)) != -1) {
+            count++;
+            index += substring.length();
+        }
+        return count;
+    }
+
     private static String normalizeForKeywordCheck(String message) {
         return message.toLowerCase()
                 .replace("'", "") // Remove apostrophes
@@ -610,11 +696,57 @@ public class ModerationListener extends ListenerAdapter {
             return;
         }
         
-        // Check if channel has abnormally high average heat
-        double HEAT_ALERT_THRESHOLD = 0.8;
-        if (channelStats.averageHeatIndex > HEAT_ALERT_THRESHOLD) {
-            sendAlert(event.getJDA(), serverId, channelName, channelStats.averageHeatIndex, messageHeatIndex);
+        // Track recent heat for sustained heat detection
+        String heatKey = serverId + ":" + channelId;
+        addToHeatHistory(heatKey, channelStats.averageHeatIndex);
+        
+        // Check if channel has abnormally high average heat AND sustained high heat
+        double HEAT_ALERT_THRESHOLD = 0.35;
+        if (channelStats.averageHeatIndex > HEAT_ALERT_THRESHOLD && isSustainedHighHeat(heatKey)) {
+            // Check if alert cooldown has expired
+            Long lastAlert = lastAlertTime.get(heatKey);
+            long currentTime = System.currentTimeMillis();
+            long cooldownMs = serverConfig.config.alert_cooldown_seconds * 1000; // Convert seconds to ms
+            
+            if (lastAlert == null || (currentTime - lastAlert) >= cooldownMs) {
+                sendAlert(event.getJDA(), serverId, channelName, channelStats.averageHeatIndex, messageHeatIndex);
+                lastAlertTime.put(heatKey, currentTime);
+            }
         }
+    }
+    
+    /**
+     * Adds a heat value to the recent heat history for a channel.
+     * Maintains only the last MAX_HEAT_HISTORY values.
+     */
+    private void addToHeatHistory(String heatKey, double heat) {
+        LinkedHashMap<Long, Double> history = recentChannelHeats.get(heatKey);
+        if (history == null) {
+            history = new LinkedHashMap<Long, Double>() {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry eldest) {
+                    return size() > MAX_HEAT_HISTORY;
+                }
+            };
+            recentChannelHeats.put(heatKey, history);
+        }
+        history.put(System.currentTimeMillis(), heat);
+    }
+    
+    /**
+     * Checks if a channel has sustained high heat (multiple recent messages with elevated heat).
+     * Returns true if the average of recent heat values meets or exceeds SUSTAINED_HEAT_THRESHOLD.
+     */
+    private boolean isSustainedHighHeat(String heatKey) {
+        LinkedHashMap<Long, Double> history = recentChannelHeats.get(heatKey);
+        if (history == null || history.size() < 3) {
+            // Need at least 3 recent messages to consider it "sustained"
+            return false;
+        }
+        
+        double sum = history.values().stream().mapToDouble(Double::doubleValue).sum();
+        double average = sum / history.size();
+        return average >= SUSTAINED_HEAT_THRESHOLD;
     }
 
     /**
@@ -640,9 +772,9 @@ public class ModerationListener extends ListenerAdapter {
             
             // Determine color based on heat level severity
             Color embedColor = Color.YELLOW;
-            if (averageHeat > 1.5) {
+            if (averageHeat > 0.8) {
                 embedColor = new Color(255, 69, 0); // Orange-red
-            } else if (averageHeat > 1.0) {
+            } else if (averageHeat > 0.5) {
                 embedColor = Color.ORANGE;
             }
             
