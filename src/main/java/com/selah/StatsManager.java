@@ -162,12 +162,20 @@ public class StatsManager {
             return;
         }
 
+        Path statsDir = Path.of(App.WORKING_DIRECTORY + "server_stats");
         Path filePath = Path.of(App.WORKING_DIRECTORY + "server_stats/" + serverId + ".json");
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
-        try (Writer writer = Files.newBufferedWriter(filePath)) {
-            gson.toJson(stats, writer);
-            System.out.println("Successfully saved stats for server ID: " + serverId);
+        try {
+            // Ensure the server_stats directory exists
+            if (!Files.exists(statsDir)) {
+                Files.createDirectories(statsDir);
+            }
+            
+            try (Writer writer = Files.newBufferedWriter(filePath)) {
+                gson.toJson(stats, writer);
+                System.out.println("Successfully saved stats for server ID: " + serverId);
+            }
         } catch (IOException e) {
             System.err.println("Failed to save stats for server ID: " + serverId);
             e.printStackTrace();

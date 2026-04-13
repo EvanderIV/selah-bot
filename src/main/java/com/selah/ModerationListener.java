@@ -487,18 +487,18 @@ public class ModerationListener extends ListenerAdapter {
         long totalLetters = message.chars().filter(Character::isLetter).count();
         double upperCaseRatio = totalLetters == 0 ? 0 : (double) upperCaseChars / totalLetters;
 
-        if (message.length() > 25 && upperCaseRatio > 0.04 && upperCaseRatio < 0.4) {
-            if (App.DEBUG_MODE) System.out.println("[DEBUG] Standard caps detected (" + String.format("%.2f", upperCaseRatio * 100) + "%) (+0.2)");
-            return 0.2;
-        } else if (message.length() > 15 && upperCaseRatio > 0.08 && upperCaseRatio < 0.4) {
-            if (App.DEBUG_MODE) System.out.println("[DEBUG] Standard caps detected on short string (" + String.format("%.2f", upperCaseRatio * 100) + "%) (+0.1)");
+        if (message.length() > 35 && upperCaseRatio > 0.06 && upperCaseRatio < 0.4) {
+            if (App.DEBUG_MODE) System.out.println("[DEBUG] Standard caps detected (" + String.format("%.2f", upperCaseRatio * 100) + "%) (+0.1)");
             return 0.1;
+        } else if (message.length() > 10 && upperCaseRatio > 0.2 && upperCaseRatio < 0.4) {
+            if (App.DEBUG_MODE) System.out.println("[DEBUG] Standard caps detected on short string (" + String.format("%.2f", upperCaseRatio * 100) + "%) (+0.05)");
+            return 0.05;
         } else if (upperCaseRatio > 0.7) {
-            if (App.DEBUG_MODE) System.out.println("[DEBUG] Casually excessive caps detected (" + String.format("%.2f", upperCaseRatio * 100) + "%) (-0.2)");
-            return -0.2;
+            if (App.DEBUG_MODE) System.out.println("[DEBUG] Casually excessive caps detected (" + String.format("%.2f", upperCaseRatio * 100) + "%) (-0.1)");
+            return -0.1;
         } else if (upperCaseRatio <= 0.0) {
-            if (App.DEBUG_MODE) System.out.println("[DEBUG] Casually minimal caps detected (" + String.format("%.2f", upperCaseRatio * 100) + "%) (-0.2)");
-            return -0.2;
+            if (App.DEBUG_MODE) System.out.println("[DEBUG] Casually minimal caps detected (" + String.format("%.2f", upperCaseRatio * 100) + "%) (-0.1)");
+            return -0.1;
         } else if (App.DEBUG_MODE) {
             System.out.println("[DEBUG] Capitalization: " + String.format("%.2f", upperCaseRatio * 100) + "%");
         }
