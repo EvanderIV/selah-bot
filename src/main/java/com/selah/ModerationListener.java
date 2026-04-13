@@ -710,6 +710,15 @@ public class ModerationListener extends ListenerAdapter {
         // Check if channel has abnormally high average heat AND sustained high heat
         double HEAT_ALERT_THRESHOLD = 0.35;
         if (channelStats.averageHeatIndex > HEAT_ALERT_THRESHOLD && isSustainedHighHeat(heatKey)) {
+            if (App.DEBUG_MODE) {
+                LinkedHashMap<Long, Double> history = recentChannelHeats.get(heatKey);
+                double historyAverage = history.values().stream().mapToDouble(Double::doubleValue).sum() / history.size();
+                System.out.println("[ALERT] Sustained high heat detected in #" + channelName + 
+                        " | Channel avg: " + String.format("%.3f", channelStats.averageHeatIndex) + 
+                        " | History size: " + history.size() + 
+                        " | History avg: " + String.format("%.3f", historyAverage));
+            }
+            
             // Check if alert cooldown has expired
             Long lastAlert = lastAlertTime.get(heatKey);
             long currentTime = System.currentTimeMillis();
@@ -718,6 +727,10 @@ public class ModerationListener extends ListenerAdapter {
             if (lastAlert == null || (currentTime - lastAlert) >= cooldownMs) {
                 sendAlert(event.getJDA(), serverId, channelName, channelStats.averageHeatIndex, messageHeatIndex);
                 lastAlertTime.put(heatKey, currentTime);
+            } else if (App.DEBUG_MODE) {
+                long remainingCooldown = cooldownMs - (currentTime - lastAlert);
+                System.out.println("[ALERT] Alert suppressed by cooldown for #" + channelName + 
+                        " | Remaining: " + (remainingCooldown / 1000) + " seconds");
             }
         }
     }
