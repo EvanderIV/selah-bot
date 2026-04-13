@@ -69,6 +69,7 @@ public class StatsManager {
         public String memberName;
         public String memberId;
         public double averageHeatLevel = 0.0;
+        public int messageCount = 0; // Track total messages for weighted averaging
         public double recordHighHeat = 0.0;
 
         public int moderateHeatMessages = 0;
@@ -212,12 +213,9 @@ public class StatsManager {
             serverStats.members.add(memberStats);
         }
 
-        // Calculate a simple running average
-        if (memberStats.averageHeatLevel == 0) {
-            memberStats.averageHeatLevel = heatLevel;
-        } else {
-            memberStats.averageHeatLevel = (memberStats.averageHeatLevel + heatLevel) / 2.0;
-        }
+        // Calculate a proper weighted running average using message count
+        memberStats.messageCount++;
+        memberStats.averageHeatLevel = ((memberStats.averageHeatLevel * (memberStats.messageCount - 1)) + heatLevel) / memberStats.messageCount;
 
         if (heatLevel > memberStats.recordHighHeat) {
             memberStats.recordHighHeat = heatLevel;
@@ -227,26 +225,12 @@ public class StatsManager {
             memberStats.extremeHeatMessages++;
         } else if (heatLevel > 0.8) {
             memberStats.highHeatMessages++;
-            if (memberStats.highHeatAverage == 0) {
-                memberStats.highHeatAverage = heatLevel;
-            } else {
-                if (heatLevel > memberStats.highHeatAverage) {
-                    memberStats.highHeatAverage = (0.75 * heatLevel) + (0.25 * memberStats.highHeatAverage);
-                } else {
-                    memberStats.highHeatAverage = (memberStats.highHeatAverage + heatLevel) / 2.0;
-                }
-            }
+            // Use weighted average based on message count
+            memberStats.highHeatAverage = ((memberStats.highHeatAverage * (memberStats.highHeatMessages - 1)) + heatLevel) / memberStats.highHeatMessages;
         } else if (heatLevel > 0.3) {
             memberStats.moderateHeatMessages++;
-            if (memberStats.moderateHeatAverage == 0) {
-                memberStats.moderateHeatAverage = heatLevel;
-            } else {
-                if (heatLevel > memberStats.moderateHeatAverage) {
-                    memberStats.moderateHeatAverage = (0.75 * heatLevel) + (0.25 * memberStats.moderateHeatAverage);
-                } else {
-                    memberStats.moderateHeatAverage = (memberStats.moderateHeatAverage + heatLevel) / 2.0;
-                }
-            }
+            // Use weighted average based on message count
+            memberStats.moderateHeatAverage = ((memberStats.moderateHeatAverage * (memberStats.moderateHeatMessages - 1)) + heatLevel) / memberStats.moderateHeatMessages;
         }
     }
 
