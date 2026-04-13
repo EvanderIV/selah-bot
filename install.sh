@@ -34,7 +34,9 @@ tesseract --version
 
 # Find and display the Tesseract data path
 TESSDATA_PATH=""
-if [ -d "/usr/share/tesseract-ocr/4/tessdata" ]; then
+if [ -d "/usr/share/tesseract-ocr/5/tessdata" ]; then
+    TESSDATA_PATH="/usr/share/tesseract-ocr/5/tessdata"
+elif [ -d "/usr/share/tesseract-ocr/4/tessdata" ]; then
     TESSDATA_PATH="/usr/share/tesseract-ocr/4/tessdata"
 elif [ -d "/usr/share/tesseract-ocr/4.00/tessdata" ]; then
     TESSDATA_PATH="/usr/share/tesseract-ocr/4.00/tessdata"

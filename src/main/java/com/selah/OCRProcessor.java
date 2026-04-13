@@ -78,7 +78,8 @@ public class OCRProcessor {
         
         // List of common Tesseract data paths on different systems
         String[] commonPaths = {
-            "/usr/share/tesseract-ocr/4/tessdata",           // Debian 13 (main path)
+            "/usr/share/tesseract-ocr/5/tessdata",           // Tesseract 5.x (Debian 13)
+            "/usr/share/tesseract-ocr/4/tessdata",           // Tesseract 4.x
             "/usr/share/tesseract-ocr/4.00/tessdata",        // Some versions
             "/usr/share/tesseract-ocr/tessdata",             // Simplified path
             "/usr/local/share/tessdata",                     // Custom installations
