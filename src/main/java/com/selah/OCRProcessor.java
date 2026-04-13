@@ -23,6 +23,7 @@ import java.util.regex.Pattern;
 public class OCRProcessor {
 
     private static final String WORKING_DIRECTORY = App.WORKING_DIRECTORY;
+    private static boolean TESSERACT_AVAILABLE = false;
 
     private static final Set<String> ENGLISH_SUBSTRINGS = new HashSet<>();
 
@@ -31,6 +32,32 @@ public class OCRProcessor {
         String[] substrings = {"the", "and", "ing", "ion", "ent", "her", "for", "tha", "nth", "was", "you", "ith", "ver", "all", "thi", "ter", "hat", "ere", "his", "res"};
         for (String substring : substrings) {
             ENGLISH_SUBSTRINGS.add(substring);
+        }
+        
+        // Check if Tesseract is available
+        checkTesseractAvailability();
+    }
+    
+    /**
+     * Checks if Tesseract OCR is available on the system.
+     * Sets TESSERACT_AVAILABLE flag and logs the result.
+     */
+    private static void checkTesseractAvailability() {
+        try {
+            Tesseract tesseract = new Tesseract();
+            String dataPath = System.getProperty("os.name").toLowerCase().contains("win")
+                    ? "C:/Program Files/Tesseract-OCR/tessdata"
+                    : "/usr/share/tesseract-ocr/4.00/tessdata";
+            tesseract.setDatapath(dataPath);
+            
+            // If we got here without exception, Tesseract is likely available
+            TESSERACT_AVAILABLE = true;
+            System.out.println("[OCR] Tesseract is available at: " + dataPath);
+        } catch (Throwable e) {
+            TESSERACT_AVAILABLE = false;
+            System.err.println("[OCR] Tesseract OCR is NOT available. Image text extraction will be skipped.");
+            System.err.println("[OCR] Error: " + e.getMessage());
+            System.err.println("[OCR] To enable OCR, install Tesseract: sudo apt-get install tesseract-ocr");
         }
     }
 
@@ -58,6 +85,14 @@ public class OCRProcessor {
     }
 
     public static String processImageFromUrl(String imageUrl) throws BadImageException {
+        // Skip OCR if Tesseract is not available
+        if (!TESSERACT_AVAILABLE) {
+            if (App.DEBUG_MODE) {
+                System.out.println("[OCR] Skipping OCR for " + imageUrl + " - Tesseract not available");
+            }
+            return "";
+        }
+        
         try {
             // Ensure the URL uses format=png if a format parameter exists
             if (imageUrl.contains("format=")) {
@@ -92,10 +127,22 @@ public class OCRProcessor {
             // Perform OCR on the colorized version
             System.out.println("Performing OCR on colorized image...");
             Tesseract tesseract = new Tesseract();
-            tesseract.setDatapath(System.getProperty("os.name").toLowerCase().contains("win")
-                    ? "C:/Program Files/Tesseract-OCR/tessdata"
-                    : "/usr/share/tesseract-ocr/4.00/tessdata");
-            String extractedTextColor = tesseract.doOCR(convertedImagePath.toFile());
+            try {
+                tesseract.setDatapath(System.getProperty("os.name").toLowerCase().contains("win")
+                        ? "C:/Program Files/Tesseract-OCR/tessdata"
+                        : "/usr/share/tesseract-ocr/4.00/tessdata");
+            } catch (Exception e) {
+                System.err.println("Failed to set Tesseract datapath: " + e.getMessage());
+                return "";
+            }
+            
+            String extractedTextColor = "";
+            try {
+                extractedTextColor = tesseract.doOCR(convertedImagePath.toFile());
+            } catch (Exception e) {
+                System.err.println("OCR failed on colorized image: " + e.getMessage());
+                extractedTextColor = "";
+            }
 
             // Convert the image to grayscale
             System.out.println("Converting image to grayscale...");
@@ -106,7 +153,13 @@ public class OCRProcessor {
 
             // Perform OCR on the grayscale version
             System.out.println("Performing OCR on grayscale image...");
-            String extractedTextBW = tesseract.doOCR(grayscaleImagePath.toFile());
+            String extractedTextBW = "";
+            try {
+                extractedTextBW = tesseract.doOCR(grayscaleImagePath.toFile());
+            } catch (Exception e) {
+                System.err.println("OCR failed on grayscale image: " + e.getMessage());
+                extractedTextBW = "";
+            }
 
             // Clean the extracted text
             String cleanedTextColor = cleanText(extractedTextColor);
@@ -138,14 +191,10 @@ public class OCRProcessor {
                 return cleanedTextBW;
             }
 
-        } catch (TesseractException e) {
-            System.err.println("Failed to process image for OCR.");
-            e.printStackTrace();
-            return null;
         } catch (Exception e) {
-            System.err.println("An error occurred while processing the image.");
+            System.err.println("An error occurred while processing the image: " + e.getMessage());
             e.printStackTrace();
-            return null;
+            return "";
         }
     }
 }
