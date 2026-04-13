@@ -137,6 +137,19 @@ public class StatsManager {
                     if (stats.members == null) {
                         stats.members = new ArrayList<>();
                     }
+                    
+                    // Initialize messageCount for members loaded from old stats files
+                    // This ensures the weighted averaging formula works correctly
+                    for (MemberStats member : stats.members) {
+                        if (member.messageCount == 0) {
+                            // Calculate messageCount from message category counts
+                            member.messageCount = member.extremeHeatMessages + member.highHeatMessages + member.moderateHeatMessages;
+                            // If we have an averageHeatLevel but no message count, assume at least 1 message
+                            if (member.messageCount == 0 && member.averageHeatLevel > 0) {
+                                member.messageCount = 1;
+                            }
+                        }
+                    }
 
                     liveStats.put(serverId, stats);
                     System.out.println("Loaded stats for server: " + serverConfig.name);
