@@ -28,9 +28,28 @@ apt-get install -y libtesseract-dev
 echo "[3/5] Installing Tesseract language data (English)..."
 apt-get install -y tesseract-ocr-eng
 
-echo "[4/5] Verifying Tesseract installation..."
+echo "[4/5] Verifying Tesseract installation and finding data path..."
 which tesseract
 tesseract --version
+
+# Find and display the Tesseract data path
+TESSDATA_PATH=""
+if [ -d "/usr/share/tesseract-ocr/4/tessdata" ]; then
+    TESSDATA_PATH="/usr/share/tesseract-ocr/4/tessdata"
+elif [ -d "/usr/share/tesseract-ocr/4.00/tessdata" ]; then
+    TESSDATA_PATH="/usr/share/tesseract-ocr/4.00/tessdata"
+elif [ -d "/usr/share/tesseract-ocr/tessdata" ]; then
+    TESSDATA_PATH="/usr/share/tesseract-ocr/tessdata"
+fi
+
+if [ -n "$TESSDATA_PATH" ]; then
+    echo "Found Tesseract data at: $TESSDATA_PATH"
+    ls -la "$TESSDATA_PATH/eng.traineddata" 2>/dev/null || echo "Warning: eng.traineddata not found"
+else
+    echo "ERROR: Could not find Tesseract data directory"
+    echo "Please install: sudo apt-get install tesseract-ocr-eng"
+    exit 1
+fi
 
 echo "[5/5] Installing Java Development Kit (if not present)..."
 apt-get install -y default-jdk

@@ -24,6 +24,7 @@ public class OCRProcessor {
 
     private static final String WORKING_DIRECTORY = App.WORKING_DIRECTORY;
     private static boolean TESSERACT_AVAILABLE = false;
+    private static String TESSERACT_DATA_PATH = null;
 
     private static final Set<String> ENGLISH_SUBSTRINGS = new HashSet<>();
 
@@ -40,25 +41,60 @@ public class OCRProcessor {
     
     /**
      * Checks if Tesseract OCR is available on the system.
-     * Sets TESSERACT_AVAILABLE flag and logs the result.
+     * Sets TESSERACT_AVAILABLE flag and TESSERACT_DATA_PATH, and logs the result.
      */
     private static void checkTesseractAvailability() {
         try {
             Tesseract tesseract = new Tesseract();
-            String dataPath = System.getProperty("os.name").toLowerCase().contains("win")
-                    ? "C:/Program Files/Tesseract-OCR/tessdata"
-                    : "/usr/share/tesseract-ocr/4.00/tessdata";
-            tesseract.setDatapath(dataPath);
+            TESSERACT_DATA_PATH = findTesseractDataPath();
+            if (TESSERACT_DATA_PATH == null) {
+                throw new Exception("Could not find Tesseract data directory");
+            }
+            tesseract.setDatapath(TESSERACT_DATA_PATH);
             
             // If we got here without exception, Tesseract is likely available
             TESSERACT_AVAILABLE = true;
-            System.out.println("[OCR] Tesseract is available at: " + dataPath);
+            System.out.println("[OCR] Tesseract is available at: " + TESSERACT_DATA_PATH);
         } catch (Throwable e) {
             TESSERACT_AVAILABLE = false;
+            TESSERACT_DATA_PATH = null;
             System.err.println("[OCR] Tesseract OCR is NOT available. Image text extraction will be skipped.");
             System.err.println("[OCR] Error: " + e.getMessage());
-            System.err.println("[OCR] To enable OCR, install Tesseract: sudo apt-get install tesseract-ocr");
+            System.err.println("[OCR] To enable OCR, install Tesseract: sudo apt-get install tesseract-ocr tesseract-ocr-eng");
         }
+    }
+    
+    /**
+     * Finds the Tesseract data directory by checking common paths.
+     * Returns null if no valid path is found.
+     */
+    private static String findTesseractDataPath() {
+        // Check environment variable first
+        String envPath = System.getenv("TESSDATA_PREFIX");
+        if (envPath != null && Files.exists(Path.of(envPath))) {
+            System.out.println("[OCR] Using TESSDATA_PREFIX: " + envPath);
+            return envPath;
+        }
+        
+        // List of common Tesseract data paths on different systems
+        String[] commonPaths = {
+            "/usr/share/tesseract-ocr/4/tessdata",           // Debian 13 (main path)
+            "/usr/share/tesseract-ocr/4.00/tessdata",        // Some versions
+            "/usr/share/tesseract-ocr/tessdata",             // Simplified path
+            "/usr/local/share/tessdata",                     // Custom installations
+            "C:/Program Files/Tesseract-OCR/tessdata",       // Windows
+            "C:/Program Files (x86)/Tesseract-OCR/tessdata"  // Windows 32-bit
+        };
+        
+        for (String path : commonPaths) {
+            Path tessPath = Path.of(path);
+            if (Files.exists(tessPath)) {
+                System.out.println("[OCR] Found Tesseract data at: " + path);
+                return path;
+            }
+        }
+        
+        return null;
     }
 
     private static int countEnglishSubstrings(String text) {
@@ -128,9 +164,7 @@ public class OCRProcessor {
             System.out.println("Performing OCR on colorized image...");
             Tesseract tesseract = new Tesseract();
             try {
-                tesseract.setDatapath(System.getProperty("os.name").toLowerCase().contains("win")
-                        ? "C:/Program Files/Tesseract-OCR/tessdata"
-                        : "/usr/share/tesseract-ocr/4.00/tessdata");
+                tesseract.setDatapath(TESSERACT_DATA_PATH);
             } catch (Exception e) {
                 System.err.println("Failed to set Tesseract datapath: " + e.getMessage());
                 return "";
