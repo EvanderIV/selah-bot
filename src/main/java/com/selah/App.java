@@ -97,6 +97,9 @@ public class App {
             // Load configurations before loading server stats
             loadConfigurations();
 
+            // Ensure server_stats directory exists
+            ensureServerStats();
+
             // Load server stats
             StatsManager.loadServerStats();
 
@@ -207,6 +210,7 @@ public class App {
         // --- 3. Load and Parse the JSON ---
         loadConfigurations();
         KeywordManager.loadKeywords(); // Load keywords from JSON
+        ensureServerStats(); // Ensure server_stats directory exists
         StatsManager.loadServerStats(); // Get historical stats from disk into memory
 
         // --- 4. Initialize the Bot ---
@@ -372,6 +376,22 @@ public class App {
             });
         } catch (Exception e) {
             System.err.println("Failed to ensure server configs.");
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Ensures the server_stats directory exists, creating it if necessary.
+     */
+    private static void ensureServerStats() {
+        try {
+            Path statsFolder = Path.of(WORKING_DIRECTORY, "server_stats");
+            if (!Files.exists(statsFolder)) {
+                Files.createDirectories(statsFolder);
+                System.out.println("Created server_stats folder at: " + statsFolder.toAbsolutePath());
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to ensure server_stats directory exists.");
             e.printStackTrace();
         }
     }
