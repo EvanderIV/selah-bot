@@ -362,7 +362,9 @@ public class StatsManager {
             .orElse(null);
 
         if (reactor == null) {
-            System.err.println("Reactor not found in server stats: " + reactorId);
+            if (App.DEBUG_MODE) {
+                System.err.println("Reactor not found in server stats: " + reactorId);
+            }
             return;
         }
 
