@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import java.io.IOException;
-import java.io.Reader; // <-- Added this import
+import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -79,9 +79,26 @@ public class StatsManager {
 
         public int extremeHeatMessages = 0;
 
+        public int infractionLevel = 0;
+        public int totalInfractions = 0;
+        public String lastInfractionDate = null;
+        public String infractionLevelReductionDate = null;
+
+        public List<MemberRelation> relations = new ArrayList<>(); // Added to track user relations
+
         public MemberStats(String memberName, String memberId) {
             this.memberName = memberName;
             this.memberId = memberId;
+        }
+    }
+
+    public static class MemberRelation {
+        public String targetMemberId;
+        public double affection;
+
+        public MemberRelation(String targetMemberId) {
+            this.targetMemberId = targetMemberId;
+            this.affection = 0.0;
         }
     }
 
@@ -94,45 +111,42 @@ public class StatsManager {
     public static void loadServerStats() {
         // --- Create the directory if it doesn't exist ---
         Path statsDir = Path.of(App.WORKING_DIRECTORY + "server_stats");
+        System.out.println("Loading server stats from: " + statsDir.toAbsolutePath()); // Debug log for directory
+
         if (!Files.exists(statsDir)) {
-            try {
-                Files.createDirectories(statsDir);
-                System.out.println("INFO: 'server_stats' directory not found. Creating it now.");
-            } catch (IOException e) {
-                System.err.println("CRITICAL: Failed to create the 'server_stats' directory. Statistics will not be saved.");
-                e.printStackTrace();
-                return; // Exit if we can't create the directory
-            }
+            System.out.println("Stats directory does not exist: " + statsDir.toAbsolutePath());
+            return;
         }
-        
+
         Gson gson = new Gson();
-        
+
         for (App.ServerNode serverConfig : App.guildConfigs.values()) {
             String serverId = serverConfig.id;
             Path filePath = Path.of(App.WORKING_DIRECTORY + "server_stats/" + serverId + ".json");
-            
+
+            System.out.println("Attempting to load stats for server: " + serverConfig.name + " from file: " + filePath.toAbsolutePath()); // Debug log for file path
+
             if (Files.exists(filePath)) {
                 try (Reader reader = Files.newBufferedReader(filePath)) {
                     ServerStats stats = gson.fromJson(reader, ServerStats.class);
-                    
-                    // Failsafe: If JSON was manually edited and channels array was deleted, prevent NullPointerExceptions
+
                     if (stats.channels == null) {
                         stats.channels = new ArrayList<>();
                     }
                     if (stats.members == null) {
                         stats.members = new ArrayList<>();
                     }
-                    
+
                     liveStats.put(serverId, stats);
-                    System.out.println("Loaded existing historical stats for server: " + serverConfig.name);
+                    System.out.println("Loaded stats for server: " + serverConfig.name);
                 } catch (IOException | com.google.gson.JsonSyntaxException e) {
                     System.err.println("Failed to read stats file for " + serverConfig.name + ". Starting fresh.");
+                    e.printStackTrace();
                     liveStats.put(serverId, new ServerStats(serverConfig.name, serverId));
                 }
             } else {
-                // Initialize fresh if no file exists (e.g., brand new server)
+                System.out.println("No stats file found for server: " + serverConfig.name + ". Starting fresh.");
                 liveStats.put(serverId, new ServerStats(serverConfig.name, serverId));
-                System.out.println("No existing stats found for " + serverConfig.name + ". Starting fresh.");
             }
         }
     }
@@ -143,16 +157,19 @@ public class StatsManager {
      */
     public static void saveServerStats(String serverId) {
         ServerStats stats = liveStats.get(serverId);
-        if (stats == null) return; // Nothing to save
+        if (stats == null) {
+            System.err.println("No stats found for server ID: " + serverId);
+            return;
+        }
 
-        // Using setPrettyPrinting makes the JSON readable in a text editor
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
         Path filePath = Path.of(App.WORKING_DIRECTORY + "server_stats/" + serverId + ".json");
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
         try (Writer writer = Files.newBufferedWriter(filePath)) {
             gson.toJson(stats, writer);
+            System.out.println("Successfully saved stats for server ID: " + serverId);
         } catch (IOException e) {
-            System.err.println("Failed to write stats file for server " + serverId);
+            System.err.println("Failed to save stats for server ID: " + serverId);
             e.printStackTrace();
         }
     }
@@ -319,7 +336,96 @@ public class StatsManager {
         if (channelStats.averageHeatIndex == 0) {
             channelStats.averageHeatIndex = heatIndex;
         } else {
-            channelStats.averageHeatIndex = (channelStats.averageHeatIndex + heatIndex) / 2.0;
+            if (heatIndex > channelStats.averageHeatIndex) {
+                channelStats.averageHeatIndex = (0.75 * heatIndex) + (0.25 * channelStats.averageHeatIndex);
+            } else {
+                channelStats.averageHeatIndex = (0.50 * channelStats.averageHeatIndex) + (0.50 * heatIndex);
+            }
         }
+    }
+
+    public static void updateUserRelation(String serverId, String reactorId, String targetId, double affectionChange) {
+        ServerStats serverStats = liveStats.get(serverId);
+        if (serverStats == null) {
+            System.err.println("Server stats not found for server ID: " + serverId);
+            return;
+        }
+
+        MemberStats reactor = serverStats.members.stream()
+            .filter(member -> member.memberId.equals(reactorId))
+            .findFirst()
+            .orElse(null);
+
+        if (reactor == null) {
+            System.err.println("Reactor not found in server stats: " + reactorId);
+            return;
+        }
+
+        MemberStats target = serverStats.members.stream()
+            .filter(member -> member.memberId.equals(targetId))
+            .findFirst()
+            .orElse(null);
+
+        if (target == null) {
+            if (App.DEBUG_MODE) {
+                System.out.println("Target not found in server stats: " + targetId);
+            }
+            return;
+        }
+
+        // Update or add the relation
+        if (reactor.relations == null) {
+            reactor.relations = new ArrayList<>();
+        }
+
+        MemberRelation relation = reactor.relations.stream()
+            .filter(r -> r.targetMemberId.equals(targetId))
+            .findFirst()
+            .orElseGet(() -> {
+                MemberRelation newRelation = new MemberRelation(targetId);
+                reactor.relations.add(newRelation);
+                return newRelation;
+            });
+
+        relation.affection += affectionChange;
+        if (App.DEBUG_MODE) {
+            System.out.println("Updated affection between " + reactorId + " and " + targetId + ": " + relation.affection);
+        }
+    }
+
+    /**
+     * Adjusts the affection level between two members.
+     * The incoming affection is scaled based on the current affection level.
+     *
+     * @param currentAffection The current affection level.
+     * @param incomingAffection The incoming affection adjustment.
+     * @return The updated affection level, capped at +/-10.0.
+     */
+    public static double adjustAffection(double currentAffection, double incomingAffection) {
+        // Cap affection at +/- 10.0
+        double maxAffection = 10.0;
+        double minAffection = -10.0;
+
+        // If current affection is 0, apply incoming affection as-is
+        if (currentAffection == 0) {
+            currentAffection += incomingAffection;
+        } else {
+            // Scale incoming affection by dividing by the absolute value of current affection
+            currentAffection += incomingAffection / Math.abs(currentAffection);
+        }
+
+        // Ensure affection stays within bounds
+        if (currentAffection > maxAffection) {
+            currentAffection = maxAffection;
+        } else if (currentAffection < minAffection) {
+            currentAffection = minAffection;
+        }
+
+        // Apply a react bonus of 0.01 only if current affection is less than 4
+        if (incomingAffection == 0.01 && currentAffection >= 4) {
+            return currentAffection; // No bonus applied
+        }
+
+        return currentAffection;
     }
 }

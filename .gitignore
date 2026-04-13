@@ -1,1 +1,4 @@
 server_stats/
+server_configs/
+archive_*.txt
+SELAH_OCR_*.png

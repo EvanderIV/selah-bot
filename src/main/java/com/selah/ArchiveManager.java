@@ -32,7 +32,7 @@ public class ArchiveManager {
 
         String guildId = channel.getGuild().getId();
         String channelName = channel.getName();
-        String fileName = guildId + "_" + channelName + ".txt";
+        String fileName = "archive_" + guildId + "_" + channelName + ".txt";
 
         System.out.println("Starting archive for channel #" + channelName + " in guild " + channel.getGuild().getName() + "...");
         System.out.println("Output file: " + fileName);
@@ -74,6 +74,8 @@ public class ArchiveManager {
         } catch (InterruptedException | ExecutionException e) {
             System.err.println("CRITICAL: Failed to fetch messages from Discord API.");
             e.printStackTrace();
+        } catch (IllegalArgumentException e) {
+            System.out.println("WARN: Encountered message of unknown type. Skipping...");
         }
     }
 }
