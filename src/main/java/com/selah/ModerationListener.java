@@ -200,7 +200,9 @@ public class ModerationListener extends ListenerAdapter {
                 break;
         }
 
-        System.out.println("Affection change: " + affectionChange);
+        if (App.DEBUG_MODE) {
+            System.out.println("Affection change: " + affectionChange);
+        }
 
         // Update the relations array
         StatsManager.updateUserRelation(serverId, reactorId, messageAuthorId, affectionChange);
