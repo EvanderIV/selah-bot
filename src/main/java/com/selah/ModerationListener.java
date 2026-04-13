@@ -373,6 +373,9 @@ public class ModerationListener extends ListenerAdapter {
         int replyDepth = countReplyChainDepth(event.getMessage());
         double replyBonus = (replyDepth - 1) * 0.1;
         heat += replyBonus;
+
+        heat = Math.max(0, heat);
+
         if (App.DEBUG_MODE && replyBonus > 0) {
             System.out.println("[DEBUG] Reply chain depth: " + replyDepth + " (+" + String.format("%.1f", replyBonus) + ")");
         }
