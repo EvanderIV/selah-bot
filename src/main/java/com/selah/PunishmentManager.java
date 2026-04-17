@@ -33,14 +33,11 @@ public class PunishmentManager {
             return;
         }
 
-        MemberStats memberStats = serverStats.members.stream()
-            .filter(member -> member.memberId.equals(userId))
-            .findFirst()
-            .orElseGet(() -> {
-                MemberStats newMember = new MemberStats(user.getName(), userId);
-                serverStats.members.add(newMember);
-                return newMember;
-            });
+        MemberStats memberStats = serverStats.members.get(userId);
+        if (memberStats == null) {
+            memberStats = new MemberStats(user.getName(), userId);
+            serverStats.members.put(userId, memberStats);
+        }
 
         // Increment infraction level and total infractions
         memberStats.infractionLevel++;

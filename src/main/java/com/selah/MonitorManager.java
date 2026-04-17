@@ -95,11 +95,11 @@ public class MonitorManager {
             return;
         }
 
-        List<StatsManager.ChannelStats> sortedChannels = stats.channels.stream()
+        List<StatsManager.ChannelStats> sortedChannels = stats.channels.values().stream()
                 .sorted((a, b) -> Double.compare(a.averageHeatIndex, b.averageHeatIndex))
                 .collect(Collectors.toList());
 
-        List<StatsManager.MemberStats> sortedUsers = stats.members.stream()
+        List<StatsManager.MemberStats> sortedUsers = stats.members.values().stream()
                 .sorted((a, b) -> Double.compare(a.averageHeatLevel, b.averageHeatLevel))
                 .collect(Collectors.toList());
 
@@ -147,7 +147,7 @@ public class MonitorManager {
         }
 
         // Sort channels by average heat index (ascending = least to most hot)
-        List<StatsManager.ChannelStats> sorted = stats.channels.stream()
+        List<StatsManager.ChannelStats> sorted = stats.channels.values().stream()
                 .sorted((a, b) -> Double.compare(a.averageHeatIndex, b.averageHeatIndex))
                 .collect(Collectors.toList());
 
@@ -171,7 +171,7 @@ public class MonitorManager {
         }
 
         // Sort members by average heat level (ascending = least to most hot)
-        List<StatsManager.MemberStats> sorted = stats.members.stream()
+        List<StatsManager.MemberStats> sorted = stats.members.values().stream()
                 .sorted((a, b) -> Double.compare(a.averageHeatLevel, b.averageHeatLevel))
                 .collect(Collectors.toList());
 

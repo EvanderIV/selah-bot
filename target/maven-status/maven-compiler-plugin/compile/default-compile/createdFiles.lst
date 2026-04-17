@@ -1,6 +1,7 @@
 com\selah\StatsManager$ChannelStats.class
 com\selah\StatsManager$MemberStats.class
 com\selah\App$ServerNode.class
+com\selah\BannedWordScanner.class
 com\selah\MonitorManager.class
 com\selah\PunishmentManager.class
 com\selah\App.class

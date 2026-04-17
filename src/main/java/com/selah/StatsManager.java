@@ -37,11 +37,11 @@ public class StatsManager {
         public int totalMessagesAnalyzed = 0;
         public int totalInfractions = 0;
         
-        // Array of individual channels
-        public List<ChannelStats> channels = new ArrayList<>();
+        // Map of individual channels (keyed by channelId for O(1) lookups)
+        public Map<String, ChannelStats> channels = new HashMap<>();
         
-        // Array of individual members
-        public List<MemberStats> members = new ArrayList<>();
+        // Map of individual members (keyed by memberId for O(1) lookups)
+        public Map<String, MemberStats> members = new HashMap<>();
 
         public ServerStats(String serverName, String serverId) {
             this.serverName = serverName;
@@ -132,15 +132,15 @@ public class StatsManager {
                     ServerStats stats = gson.fromJson(reader, ServerStats.class);
 
                     if (stats.channels == null) {
-                        stats.channels = new ArrayList<>();
+                        stats.channels = new HashMap<>();
                     }
                     if (stats.members == null) {
-                        stats.members = new ArrayList<>();
+                        stats.members = new HashMap<>();
                     }
                     
                     // Initialize messageCount for members loaded from old stats files
                     // This ensures the weighted averaging formula works correctly
-                    for (MemberStats member : stats.members) {
+                    for (MemberStats member : stats.members.values()) {
                         if (member.messageCount == 0) {
                             // Calculate messageCount from message category counts
                             member.messageCount = member.extremeHeatMessages + member.highHeatMessages + member.moderateHeatMessages;
@@ -216,14 +216,11 @@ public class StatsManager {
         ServerStats serverStats = liveStats.get(serverId);
         if (serverStats == null) return;
 
-        MemberStats memberStats = serverStats.members.stream()
-                .filter(m -> m.memberId.equals(memberId))
-                .findFirst()
-                .orElse(null);
+        MemberStats memberStats = serverStats.members.get(memberId);
 
         if (memberStats == null) {
             memberStats = new MemberStats(memberName, memberId);
-            serverStats.members.add(memberStats);
+            serverStats.members.put(memberId, memberStats);
         }
 
         // Calculate a proper weighted running average using message count
@@ -279,10 +276,10 @@ public class StatsManager {
 
             // Remove any channels from our stats that are not in the valid set
             int originalSize = stats.channels.size();
-            boolean removed = stats.channels.removeIf(channel -> !existingChannelIds.contains(channel.channelId));
+            stats.channels.keySet().removeIf(channelId -> !existingChannelIds.contains(channelId));
             
-            if (removed) {
-                int newSize = stats.channels.size();
+            int newSize = stats.channels.size();
+            if (originalSize > newSize) {
                 System.out.println("Synced channels for " + guild.getName() + ". Removed " + (originalSize - newSize) + " stale channel(s).");
             }
         }
@@ -324,14 +321,11 @@ public class StatsManager {
         ServerStats serverStats = liveStats.get(serverId);
         if (serverStats == null) return;
 
-        ChannelStats channelStats = serverStats.channels.stream()
-                .filter(c -> c.channelId.equals(channelId))
-                .findFirst()
-                .orElse(null);
+        ChannelStats channelStats = serverStats.channels.get(channelId);
 
         if (channelStats == null) {
             channelStats = new ChannelStats(channelName, channelId);
-            serverStats.channels.add(channelStats);
+            serverStats.channels.put(channelId, channelStats);
         }
 
         // --- Update Metrics ---
@@ -356,10 +350,7 @@ public class StatsManager {
             return;
         }
 
-        MemberStats reactor = serverStats.members.stream()
-            .filter(member -> member.memberId.equals(reactorId))
-            .findFirst()
-            .orElse(null);
+        MemberStats reactor = serverStats.members.get(reactorId);
 
         if (reactor == null) {
             if (App.DEBUG_MODE) {
@@ -368,10 +359,7 @@ public class StatsManager {
             return;
         }
 
-        MemberStats target = serverStats.members.stream()
-            .filter(member -> member.memberId.equals(targetId))
-            .findFirst()
-            .orElse(null);
+        MemberStats target = serverStats.members.get(targetId);
 
         if (target == null) {
             if (App.DEBUG_MODE) {

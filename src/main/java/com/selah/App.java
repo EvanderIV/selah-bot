@@ -1,16 +1,12 @@
 package com.selah;
 
 import java.io.Reader;
-import java.io.InputStream;
-import java.net.URI;
-import java.net.HttpURLConnection;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
-import java.time.LocalDateTime;
 
 import com.google.gson.Gson;
 
@@ -20,18 +16,10 @@ import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.EmbedBuilder;
 import java.awt.Color;
 
-import java.nio.file.StandardCopyOption;
-import net.sourceforge.tess4j.Tesseract;
-import java.util.Locale;
-import javax.imageio.ImageIO;
-
-import org.apache.commons.io.FilenameUtils;
-import java.awt.image.BufferedImage;
-import java.io.File;
-
 public class App {
 
     public static boolean DEBUG_MODE = false;
+    public static boolean DIET_MODE = false; // Set to true for faster checks (current message only, no context)
     public static final String WORKING_DIRECTORY = getWorkingDirectory();
 
     private static String getWorkingDirectory() {
@@ -61,13 +49,17 @@ public class App {
     }
 
     public static class ModSettings {
-        public boolean bad_word_filter;
+        public boolean word_filter;
+        public boolean delete_filtered_messages;
+        public boolean timeout_for_filtered_messages;
         public boolean slowmode_alerts;
         public String log_channel_id;
         public String alert_channel_id;
         public String warning_channel_id;
         public long alert_cooldown_seconds = 60; // Default: 60 seconds
         public int save_interval = 5;
+        public String timeout_mode = "flat"; // Options: "flat", "factorial", "exponential"
+        public long timeout_base_seconds = 60; // Base timeout in seconds (1 minute default)
         public List<String> banned_words;
     }
 
@@ -83,7 +75,17 @@ public class App {
             System.out.println("--- DEBUG MODE ENABLED ---");
         }
 
-        if (args.length > 1 && ("--check".equalsIgnoreCase(args[0]) || "-c".equalsIgnoreCase(args[0]))) {
+        // Check for diet mode flag
+        if (args.length > 0 && ("--diet".equalsIgnoreCase(args[0]) || "-diet".equalsIgnoreCase(args[0]))) {
+            DIET_MODE = true;
+            System.out.println("--- DIET MODE ENABLED: Checking current message only (no context) ---");
+        }
+
+        if (args.length > 0 && ("--check".equalsIgnoreCase(args[0]) || "-c".equalsIgnoreCase(args[0]))) {
+            if (args.length < 2) {
+                System.err.println("ERROR: -c requires an input string. Usage: -c <quoted string>");
+                return;
+            }
             DEBUG_MODE = true;
             KeywordManager.loadKeywords(); // Load keywords from JSON
             System.out.println("--- OFFLINE: THIS SESSION IS NOT RECORDED ---");
@@ -132,7 +134,7 @@ public class App {
                     System.out.println("Members in server: " + stats.members.size()); // Debug log for members
                 }
 
-                for (StatsManager.MemberStats member : stats.members) {
+                for (StatsManager.MemberStats member : stats.members.values()) {
                     if (member.relations == null || member.relations.isEmpty()) {
                         if (DEBUG_MODE) {
                             System.out.println("No relations for member: " + member.memberName); // Debug log for empty relations
@@ -141,10 +143,7 @@ public class App {
                     }
 
                     for (StatsManager.MemberRelation relation : member.relations) {
-                        StatsManager.MemberStats target = stats.members.stream()
-                                .filter(m -> m.memberId.equals(relation.targetMemberId))
-                                .findFirst()
-                                .orElse(null);
+                        StatsManager.MemberStats target = stats.members.get(relation.targetMemberId);
 
                         if (target == null) {
                             if (DEBUG_MODE) {
@@ -177,13 +176,16 @@ public class App {
             return;
         }
         
-        if (args.length > 1 && ("--ocr".equalsIgnoreCase(args[0]) || "-o".equalsIgnoreCase(args[0]))) {
+        if (args.length > 0 && ("--ocr".equalsIgnoreCase(args[0]) || "-o".equalsIgnoreCase(args[0]))) {
+            if (args.length < 2) {
+                System.err.println("ERROR: -o requires an image URL. Usage: -o <image_url>");
+                return;
+            }
             System.out.println("--- OFFLINE: OCR MODE ---");
 
             String imageUrl = args[1];
-            OCRProcessor ocrProcessor = new OCRProcessor();
             try {
-                String extractedText = ocrProcessor.processImageFromUrl(imageUrl);
+                String extractedText = OCRProcessor.processImageFromUrl(imageUrl);
                 System.out.println("Extracted Text:\n" + extractedText);
             } catch (BadImageException e) {
                 System.err.println("Failed to process image: " + e.getMessage());
@@ -193,13 +195,17 @@ public class App {
             return;
         }
 
-        if (args.length > 1 && ("--test-alerts".equalsIgnoreCase(args[0]) || "-t".equalsIgnoreCase(args[0]))) {
+        if (args.length > 0 && ("--test-alerts".equalsIgnoreCase(args[0]) || "-t".equalsIgnoreCase(args[0]))) {
             System.out.println("--- TEST MODE: ALERT AND WARNING SYSTEM ---");
             handleTestMode(args);
             return;
         }
 
-        if (args.length > 1 && ("--analyze-archive".equalsIgnoreCase(args[0]) || "-aa".equalsIgnoreCase(args[0]))) {
+        if (args.length > 0 && ("--analyze-archive".equalsIgnoreCase(args[0]) || "-aa".equalsIgnoreCase(args[0]))) {
+            if (args.length < 2) {
+                System.err.println("ERROR: -aa requires an archive file path. Usage: -aa <archive_file_path>");
+                return;
+            }
             System.out.println("--- ARCHIVE ANALYSIS MODE ---");
             DEBUG_MODE = true;
             KeywordManager.loadKeywords();
@@ -232,7 +238,12 @@ public class App {
             // Ensure server configs are up-to-date
             ensureServerConfigs(jda);
 
-            if (args.length > 1 && ("archive".equalsIgnoreCase(args[0]) || "-a".equalsIgnoreCase(args[0]))) {
+            if (args.length > 0 && ("--archive".equalsIgnoreCase(args[0]) || "-a".equalsIgnoreCase(args[0]))) {
+                if (args.length < 2) {
+                    System.err.println("ERROR: -a requires a channel ID. Usage: -a <channel_id>");
+                    jda.shutdown();
+                    return;
+                }
                 String channelId = args[1];
                 ArchiveManager.archiveChannel(jda, channelId);
                 System.out.println("Lifecycle complete. Shutting down...");
@@ -250,12 +261,20 @@ public class App {
             StatsManager.startSaveTimers();
 
             // Monitor mode: displays live channel or user statistics
-            if (args.length > 2 && ("--monitor".equalsIgnoreCase(args[0]) || "-m".equalsIgnoreCase(args[0]))) {
-                String monitorType = args[1].toLowerCase();
-                String serverId = args[2];
+            if (args.length > 0 && ("--monitor".equalsIgnoreCase(args[0]) || "-m".equalsIgnoreCase(args[0]))) {
+                if (args.length < 2) {
+                    System.err.println("ERROR: -m requires a server ID and optional monitor type.");
+                    System.err.println("Usage: -m <server_id> [monitor_type]");
+                    System.err.println("Monitor types: 'channels', 'users', 'unified' (default)");
+                    jda.shutdown();
+                    return;
+                }
+
+                String serverId = args[1];
+                String monitorType = args.length > 2 ? args[2].toLowerCase() : "unified";
 
                 if (!monitorType.equals("channels") && !monitorType.equals("users") && !monitorType.equals("unified")) {
-                    System.err.println("ERROR: Monitor type must be 'channels', 'users', or 'unified'");
+                    System.err.println("ERROR: Monitor type must be 'channels', 'users', or 'unified'. Got: '" + monitorType + "'");
                     jda.shutdown();
                     return;
                 }
@@ -352,16 +371,30 @@ public class App {
                                 "  \"name\": \"" + guild.getName() + "\",\n" +
                                 "  \"id\": \"" + guild.getId() + "\",\n" +
                                 "  \"config\": {\n" +
-                                "    \"save_interval\": 5,\n" +
-                                "    \"enable_alerts\": true,\n" +
-                                "    \"enable_warnings\": true,\n" +
+                                "    \"word_filter\": true,\n" +
+                                "    \"delete_filtered_messages\": true,\n" +
+                                "    \"timeout_for_filtered_messages\": true,\n" +
                                 "    \"slowmode_alerts\": false,\n" +
                                 "    \"log_channel_id\": \"\",\n" +
+                                "    \"alert_channel_id\": \"\",\n" +
+                                "    \"warning_channel_id\": \"\",\n" +
+                                "    \"alert_cooldown_seconds\": 60,\n" +
+                                "    \"save_interval\": 5,\n" +
                                 "    \"banned_words\": [\n" +
+                                "      \"niggerlicious\",\n" +
+                                "      \"niggalicious\",\n" +
+                                "      \"neggerlicious\",\n" +
+                                "      \"neggalicious\",\n" +
+                                "      \"niggeraura\",\n" +
+                                "      \"neggeraura\",\n" +
+                                "      \"niggaaura\",\n" +
+                                "      \"neggaaura\",\n" +
                                 "      \"nigger\",\n" +
+                                "      \"negger\",\n" +
                                 "      \"nigga\",\n" +
                                 "      \"negga\",\n" +
                                 "      \"faggot\",\n" +
+                                "      \"fagot\",\n" +
                                 "      \"fag\"\n" +
                                 "    ]\n" +
                                 "  }\n" +
@@ -471,7 +504,7 @@ public class App {
                     System.err.println("✗ Failed to send test alert: " + e.getMessage());
                 }
             } else {
-                System.out.println("⚠ Alert channel is not configured for this server.");
+                System.out.println("⚠️ Alert channel is not configured for this server.");
             }
 
             // Test Warning Channel
@@ -501,7 +534,7 @@ public class App {
                     System.err.println("✗ Failed to send test warning: " + e.getMessage());
                 }
             } else {
-                System.out.println("⚠ Warning channel is not configured for this server.");
+                System.out.println("⚠️ Warning channel is not configured for this server.");
             }
 
             System.out.println("\n=== TEST COMPLETE ===");

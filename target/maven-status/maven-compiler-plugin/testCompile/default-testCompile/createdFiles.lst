@@ -1,1 +1,8 @@
 com\selah\AppTest.class
+com\selah\FalsePositiveTest$TestCase.class
+com\selah\UnicodeDebugTest.class
+com\selah\KeyspaceAnalysisTest.class
+com\selah\DebugFancyTextTest.class
+com\selah\EdgeCaseSeparatorTest.class
+com\selah\BannedWordUnicodeTest.class
+com\selah\FalsePositiveTest.class
