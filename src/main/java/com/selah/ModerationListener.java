@@ -1347,19 +1347,6 @@ public class ModerationListener extends ListenerAdapter {
 
     /**
      * Sends a warning to the configured warning channel about a user's offense.
-     * @param jda The JDA instance for sending messages.
-     * @param serverId The ID of the server.
-     * @param userId The ID of the user to warn.
-     * @param reason The reason for the warning.
-     * @param messageContent The full content of the offending message for auditing.
-     * @param timeoutApplied Whether the timeout was successfully applied.
-     */
-    private void sendWarning(net.dv8tion.jda.api.JDA jda, String serverId, String userId, String reason, String messageContent, boolean timeoutApplied) {
-        sendWarning(jda, serverId, userId, reason, messageContent, timeoutApplied, 0);
-    }
-
-    /**
-     * Sends a warning to the configured warning channel about a user's offense.
      * Overloaded sendWarning method without message content (for OCR warnings).
      * @param jda The JDA instance for sending messages.
      * @param serverId The ID of the server.
@@ -1368,17 +1355,5 @@ public class ModerationListener extends ListenerAdapter {
      */
     private void sendWarning(net.dv8tion.jda.api.JDA jda, String serverId, String userId, String reason) {
         sendWarning(jda, serverId, userId, reason, "", false, 0);
-    }
-
-    /**
-     * Stub method to check if a user should be warned.
-     * To be implemented when warning thresholds are defined.
-     * @param serverId The ID of the server.
-     * @param userId The ID of the user to check.
-     * @return true if the user should be warned, false otherwise.
-     */
-    private boolean shouldWarnUser(String serverId, String userId) {
-        // TODO: Implement warning threshold logic
-        return false;
     }
 }

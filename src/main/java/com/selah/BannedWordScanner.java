@@ -224,51 +224,6 @@ public class BannedWordScanner {
     }
 
     /**
-     * Helper method that performs the actual banned word checking logic.
-     * Called three times from isBannedWordPresent with different character swaps.
-     * @param messageContent The message to check (may have character swaps applied).
-     * @param bannedWord The banned word to look for.
-     * @return true if the word or any variant is found, false otherwise.
-     */
-    private static boolean checkBannedWordInMessage(String messageContent, String bannedWord) {
-        // Normalize both the message and the banned word for variant detection
-        String normalizedMessage = normalizeForKeywordCheck(messageContent);
-        String normalizedBanned = normalizeForKeywordCheck(bannedWord);
-        
-        // Generate grammatical variants (plural, possessive, etc.) of the banned word
-        List<String> grammarVariants = generateGrammarVariants(normalizedBanned);
-        
-        // For each grammar variant, generate space-inserted variants and check
-        for (String grammarVariant : grammarVariants) {
-            List<String> spaceVariants = generateSpaceVariants(grammarVariant);
-            
-            // Check if any variant appears in the normalized message with word boundaries
-            for (String variant : spaceVariants) {
-                // Build a regex pattern that respects word boundaries
-                // Replace spaces with \s+ to allow multiple/variable spaces between parts
-                String escapedVariant = Pattern.quote(variant);
-                String pattern = "\\b" + escapedVariant.replaceAll(" ", "\\\\E\\\\s+\\\\Q") + "\\b";
-                
-                if (getPattern(pattern).matcher(normalizedMessage).find()) {
-                    return true;
-                }
-            }
-        }
-        
-        // Check for Base64 encoded representations
-        if (containsBannedWordInBase64(messageContent, bannedWord)) {
-            return true;
-        }
-        
-        // Check for binary encoded representations
-        if (containsBannedWordInBinary(messageContent, bannedWord)) {
-            return true;
-        }
-        
-        return false;
-    }
-
-    /**
      * Attempts to decode Base64 strings within the message and check for banned words.
      * @param messageContent The message content to scan.
      * @param bannedWord The banned word to look for.
