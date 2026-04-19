@@ -18,6 +18,7 @@ com\selah\HeatKeywordMatcher.class
 com\selah\StatsManager$ChannelStats.class
 com\selah\StatsManager$MemberStats.class
 com\selah\BannedWordScanner.class
+com\selah\ModerationListener$MessageWithAuthor.class
 com\selah\MonitorManager.class
 com\selah\BadImageException.class
 com\selah\App$ConfigData.class

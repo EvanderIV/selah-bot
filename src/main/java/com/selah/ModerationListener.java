@@ -1,6 +1,7 @@
 package com.selah;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -9,7 +10,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -373,12 +377,17 @@ public class ModerationListener extends ListenerAdapter {
                     if (history.size() > 0) {
                         StringBuilder contextBuilder = new StringBuilder();
                         long currentMessageId = event.getMessage().getIdLong();
+                        String currentAuthorId = event.getAuthor().getId();
                         
                         // Iterate from the end of history (oldest) to beginning (newest, just before current)
                         for (int i = history.size() - 1; i >= 0; i--) {
                             Message historyMessage = history.get(i);
                             // Skip the current message if it appears in history (prevents duplication)
                             if (historyMessage.getIdLong() == currentMessageId) {
+                                continue;
+                            }
+                            // Only include messages from the same author (back-to-back from same user)
+                            if (!historyMessage.getAuthor().getId().equals(currentAuthorId)) {
                                 continue;
                             }
                             String previousContent = historyMessage.getContentRaw();
@@ -399,6 +408,9 @@ public class ModerationListener extends ListenerAdapter {
                         
                         checkBannedWordsInMessage(event, messageContent, messageWithContext, config, serverId);
                     }
+                    
+                    // ALSO check for collaborative spam (multiple users spelling out a word)
+                    checkForCollaborativeSpam(event, messageContent, history, config, serverId);
                 },
                 error -> {
                     if (App.DEBUG_MODE) {
@@ -624,12 +636,17 @@ public class ModerationListener extends ListenerAdapter {
                     if (history.size() > 0) {
                         StringBuilder contextBuilder = new StringBuilder();
                         long currentMessageId = event.getMessage().getIdLong();
+                        String currentAuthorId = event.getAuthor().getId();
                         
                         // Iterate from the end of history (oldest) to beginning (newest, just before current)
                         for (int i = history.size() - 1; i >= 0; i--) {
                             Message historyMessage = history.get(i);
                             // Skip the current message if it appears in history (prevents duplication)
                             if (historyMessage.getIdLong() == currentMessageId) {
+                                continue;
+                            }
+                            // Only include messages from the same author (back-to-back from same user)
+                            if (!historyMessage.getAuthor().getId().equals(currentAuthorId)) {
                                 continue;
                             }
                             String previousContent = historyMessage.getContentRaw();
@@ -650,6 +667,9 @@ public class ModerationListener extends ListenerAdapter {
                         
                         checkBannedWordsInMessageUpdate(event, messageContent, messageWithContext, config, serverId);
                     }
+                    
+                    // ALSO check for collaborative spam (multiple users spelling out a word)
+                    checkForCollaborativeSpamUpdate(event, messageContent, history, config, serverId);
                 },
                 error -> {
                     if (App.DEBUG_MODE) {
@@ -1605,5 +1625,603 @@ public class ModerationListener extends ListenerAdapter {
         }
         
         return validMatches;
+    }
+
+    /**
+     * Detects collaborative spam where multiple users spell out a banned word across back-to-back messages.
+     * Example: User1 types "f", User2 types "ag" -> detected as "fag" if users are different
+     * @param event The message event
+     * @param currentMessageContent The current message being checked
+     * @param allHistory Historical messages from the channel (all users)
+     * @param config Server configuration
+     * @param serverId The server ID
+     */
+    private void checkForCollaborativeSpam(MessageReceivedEvent event, String currentMessageContent, List<Message> allHistory, App.ServerNode config, String serverId) {
+        if (App.DEBUG_MODE) {
+            System.out.println("[DEBUG] Checking for collaborative spam in message: \"" + currentMessageContent + "\"");
+            System.out.println("[DEBUG] Message history size: " + allHistory.size());
+        }
+        // Get the matcher for this server
+        AhoCorasickMatcher matcher = matcherCache.get(serverId);
+        if (matcher == null) {
+            if (App.DEBUG_MODE) System.out.println("[DEBUG] Matcher is null, returning");
+            return; // Matcher not initialized yet
+        }
+        
+        String currentAuthorId = event.getAuthor().getId();
+        long currentMessageId = event.getMessage().getIdLong();
+        
+        // Build a list of all messages with author tracking (including current message)
+        // Discord returns history in reverse chronological order (newest first), so iterate backwards
+        List<MessageWithAuthor> allMessages = new ArrayList<>();
+        
+        for (int i = allHistory.size() - 1; i >= 0; i--) {
+            Message msg = allHistory.get(i);
+            if (msg.getIdLong() != currentMessageId) {
+                String content = stripMarkdown(msg.getContentRaw());
+                if (!content.isEmpty()) {
+                    allMessages.add(new MessageWithAuthor(content, msg.getAuthor().getId(), msg.getIdLong()));
+                    if (App.DEBUG_MODE) {
+                        System.out.println("[DEBUG] History message: \"" + content + "\" from " + msg.getAuthor().getName());
+                    }
+                }
+            }
+        }
+        
+        // Add current message (use -1 as placeholder ID for unsaved current message)
+        allMessages.add(new MessageWithAuthor(currentMessageContent, currentAuthorId, currentMessageId));
+        if (App.DEBUG_MODE) {
+            System.out.println("[DEBUG] Current message: \"" + currentMessageContent + "\" from " + event.getAuthor().getName());
+            System.out.println("[DEBUG] Total messages to check: " + allMessages.size());
+        }
+        
+        // Build combined text and track character->message mapping
+        // Add space separators between messages to preserve word boundaries
+        StringBuilder combinedBuilder = new StringBuilder();
+        List<Integer> charToMessageIndex = new ArrayList<>();
+        
+        for (int idx = 0; idx < allMessages.size(); idx++) {
+            // Add space separator before each message (except first)
+            if (idx > 0 && combinedBuilder.length() > 0) {
+                combinedBuilder.append(" ");
+                charToMessageIndex.add(-1);  // -1 = separator, not part of any message
+            }
+            
+            MessageWithAuthor msg = allMessages.get(idx);
+            String stripped = stripMarkdown(msg.content).replaceAll("\\s+", "");
+            // Normalize before adding to combined string
+            String normalized = BannedWordScanner.normalizeForKeywordCheck(stripped);
+            if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG] Processing message " + idx + ": \"" + stripped + "\" -> normalized: \"" + normalized + "\"");
+            }
+            for (char c : normalized.toCharArray()) {
+                combinedBuilder.append(c);
+                charToMessageIndex.add(idx);
+            }
+        }
+        
+        // Combined string is already normalized (normalized each message individually)
+        String combined = combinedBuilder.toString();
+        if (App.DEBUG_MODE) {
+            System.out.println("[DEBUG] Combined string: \"" + combined + "\"");
+            System.out.println("[DEBUG] charToMessageIndex size: " + charToMessageIndex.size());
+        }
+        
+        if (combined.isEmpty()) {
+            if (App.DEBUG_MODE) System.out.println("[DEBUG] Combined string is empty");
+            return;
+        }
+        
+        Set<String> foundWords = matcher.findMatches(combined);
+        if (App.DEBUG_MODE) {
+            System.out.println("[DEBUG] Matches found before boundary check: " + foundWords);
+        }
+        
+        foundWords = filterByWordBoundary(combined, foundWords);
+        if (App.DEBUG_MODE) {
+            System.out.println("[DEBUG] Matches after boundary check: " + foundWords);
+        }
+        
+        if (foundWords.isEmpty()) {
+            if (App.DEBUG_MODE) System.out.println("[DEBUG] No matches found after word boundary filtering");
+            return;
+        }
+        
+        // Check if violations involve multiple authors
+        for (String bannedWord : foundWords) {
+            // Find position of this word in the combined string
+            int index = combined.indexOf(bannedWord);
+            if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG] Found banned word: \"" + bannedWord + "\" at index: " + index);
+            }
+            if (index == -1) {
+                continue;
+            }
+            
+            // Collect unique authors involved in this match
+            Set<String> involvedAuthors = new HashSet<>();
+            Set<Integer> involvedMessageIndices = new HashSet<>();
+            int matchEnd = Math.min(index + bannedWord.length(), charToMessageIndex.size());
+            
+            if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG] Match spans from " + index + " to " + matchEnd);
+            }
+            
+            for (int i = index; i < matchEnd && i < charToMessageIndex.size(); i++) {
+                int messageIdx = charToMessageIndex.get(i);
+                if (messageIdx >= 0 && messageIdx < allMessages.size()) {  // Skip separators (-1)
+                    involvedAuthors.add(allMessages.get(messageIdx).authorId);
+                    involvedMessageIndices.add(messageIdx);
+                    if (App.DEBUG_MODE) {
+                        System.out.println("[DEBUG] Character " + i + " belongs to message index " + messageIdx);
+                    }
+                }
+            }
+            
+            if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG] Involved authors: " + involvedAuthors + " (count: " + involvedAuthors.size() + ")");
+                System.out.println("[DEBUG] Involved message indices: " + involvedMessageIndices);
+                System.out.println("[DEBUG] Current author: " + currentAuthorId);
+            }
+            
+            // Only count as collaborative if 3+ messages are involved (prevents single-letter spam)
+            // AND 2+ users are involved AND current user wasn't the only one
+            if (involvedMessageIndices.size() >= 3 && involvedAuthors.size() >= 2 && !involvedAuthors.equals(Collections.singleton(currentAuthorId))) {
+                // Found collaborative spam!
+                Map<String, String> patternMap = patternToOriginalWordCache.get(serverId);
+                String originalWord = patternMap != null ? patternMap.get(bannedWord) : bannedWord;
+                
+                if (App.DEBUG_MODE) {
+                    System.out.println("[DEBUG] COLLABORATIVE SPAM DETECTED! Word: " + originalWord);
+                }
+                
+                // Delete messages involved in the spam (if configured)
+                if (config.config.delete_filtered_messages) {
+                    TextChannel channel = (TextChannel) event.getChannel();
+                    for (int msgIdx : involvedMessageIndices) {
+                        if (msgIdx >= 0 && msgIdx < allMessages.size()) {
+                            long messageIdToDelete = allMessages.get(msgIdx).messageId;
+                            try {
+                                channel.deleteMessageById(messageIdToDelete).queue(
+                                    success -> {
+                                        if (App.DEBUG_MODE) {
+                                            System.out.println("[DEBUG] Deleted collaborative spam message ID: " + messageIdToDelete);
+                                        }
+                                    },
+                                    error -> {
+                                        if (App.DEBUG_MODE) {
+                                            System.out.println("[DEBUG] Failed to delete message ID " + messageIdToDelete + ": " + error.getMessage());
+                                        }
+                                    }
+                                );
+                            } catch (Exception e) {
+                                System.err.println("[ERROR] Error queuing message delete: " + e.getMessage());
+                            }
+                        }
+                    }
+                }
+                
+                // Warn all involved authors and attempt timeouts (warnings sent from async callbacks)
+                for (String authorId : involvedAuthors) {
+                    String reason = "Collaborated to spell out banned word: " + originalWord;
+                    
+                    // Get the user's current infraction level to determine timeout duration
+                    int infractionLevel = 0;
+                    StatsManager.ServerStats serverStats = StatsManager.liveStats.get(serverId);
+                    if (serverStats != null) {
+                        StatsManager.MemberStats memberStats = serverStats.members.get(authorId);
+                        if (memberStats != null) {
+                            infractionLevel = memberStats.infractionLevel;
+                        }
+                    }
+                    
+                    // Calculate timeout duration based on current infraction level
+                    long timeoutDurationSeconds = getTimeoutDurationForLevel(infractionLevel, config.config.timeout_mode, config.config.timeout_base_seconds);
+                    
+                    // Attempt to timeout the user if configured and timeout duration > 0
+                    if (config.config.timeout_for_filtered_messages && timeoutDurationSeconds > 0) {
+                        try {
+                            Guild guild = event.getGuild();
+                            if (guild == null) {
+                                if (App.DEBUG_MODE) System.out.println("[DEBUG] Guild is null for collaborative spam timeout");
+                            } else {
+                                long authorIdLong = Long.parseLong(authorId);
+                                final String authorIdForCallback = authorId;  // For use in callback
+                                if (App.DEBUG_MODE) {
+                                    System.out.println("[DEBUG] Attempting to retrieve collaborator member (ID: " + authorIdLong + ") for timeout");
+                                }
+                                // Use retrieveMemberById (async API call) instead of getMemberById (cache-only)
+                                // This ensures we get the member even if not cached
+                                guild.retrieveMemberById(authorIdLong).queue(
+                                    member -> {
+                                        if (member.getUser().isBot()) {
+                                            if (App.DEBUG_MODE) System.out.println("[DEBUG] Cannot timeout bot user: " + member.getUser().getName());
+                                            // Send warning with no timeout
+                                            sendWarning(event.getJDA(), serverId, authorIdForCallback, "Collaborated to spell out banned word: " + originalWord, "Collaborative spam detected", false, timeoutDurationSeconds);
+                                        } else if (!guild.getSelfMember().canInteract(member)) {
+                                            if (App.DEBUG_MODE) System.out.println("[DEBUG] Cannot timeout " + member.getUser().getName() + " (insufficient permissions or admin)");
+                                            // Send warning with no timeout
+                                            sendWarning(event.getJDA(), serverId, authorIdForCallback, "Collaborated to spell out banned word: " + originalWord, "Collaborative spam detected", false, timeoutDurationSeconds);
+                                        } else {
+                                            if (App.DEBUG_MODE) {
+                                                System.out.println("[DEBUG] Attempting to timeout collaborator: " + member.getUser().getName() + " for " + timeoutDurationSeconds + " seconds");
+                                            }
+                                            member.timeoutFor(java.time.Duration.ofSeconds(timeoutDurationSeconds)).queue(
+                                                success -> {
+                                                    if (App.DEBUG_MODE) {
+                                                        System.out.println("[DEBUG] Successfully timed out collaborator: " + member.getUser().getName());
+                                                    }
+                                                    // Send warning with successful timeout
+                                                    sendWarning(event.getJDA(), serverId, authorIdForCallback, "Collaborated to spell out banned word: " + originalWord, "Collaborative spam detected", true, timeoutDurationSeconds);
+                                                    
+                                                    // Invoke punishment
+                                                    try {
+                                                        User user = event.getJDA().getUserById(authorIdForCallback);
+                                                        if (user != null) {
+                                                            PunishmentManager.invokePunishment(user, event.getGuild(), "Collaborated to spell out banned word: " + originalWord);
+                                                            if (App.DEBUG_MODE) {
+                                                                System.out.println("[DEBUG] Punishment invoked for collaborator: " + user.getName());
+                                                            }
+                                                        }
+                                                    } catch (Exception e) {
+                                                        System.err.println("[ERROR] Failed to invoke punishment for collaborator: " + e.getMessage());
+                                                        e.printStackTrace();
+                                                    }
+                                                },
+                                                error -> {
+                                                    System.err.println("[ERROR] Failed to timeout collaborator " + member.getUser().getName() + ": " + error.getMessage());
+                                                    if (App.DEBUG_MODE) {
+                                                        error.printStackTrace();
+                                                    }
+                                                    // Send warning with failed timeout
+                                                    sendWarning(event.getJDA(), serverId, authorIdForCallback, "Collaborated to spell out banned word: " + originalWord, "Collaborative spam detected", false, timeoutDurationSeconds);
+                                                    
+                                                    // Invoke punishment anyway
+                                                    try {
+                                                        User user = event.getJDA().getUserById(authorIdForCallback);
+                                                        if (user != null) {
+                                                            PunishmentManager.invokePunishment(user, event.getGuild(), "Collaborated to spell out banned word: " + originalWord);
+                                                            if (App.DEBUG_MODE) {
+                                                                System.out.println("[DEBUG] Punishment invoked for collaborator: " + user.getName());
+                                                            }
+                                                        }
+                                                    } catch (Exception e) {
+                                                        System.err.println("[ERROR] Failed to invoke punishment for collaborator: " + e.getMessage());
+                                                        e.printStackTrace();
+                                                    }
+                                                }
+                                            );
+                                        }
+                                    },
+                                    memberError -> {
+                                        System.err.println("[ERROR] Failed to retrieve collaborator member ID " + authorIdLong + ": " + memberError.getMessage());
+                                        if (App.DEBUG_MODE) {
+                                            memberError.printStackTrace();
+                                        }
+                                    }
+                                );
+                            }
+                        } catch (NumberFormatException e) {
+                            System.err.println("[ERROR] Invalid author ID format: " + authorId);
+                        } catch (Exception e) {
+                            System.err.println("[ERROR] Exception while attempting to timeout collaborator: " + e.getMessage());
+                            e.printStackTrace();
+                        }
+                    }
+                }
+                
+                if (App.DEBUG_MODE) {
+                    System.out.println("[DEBUG] Detected collaborative spam: " + originalWord + " from users: " + involvedAuthors);
+                }
+            } else if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG] Not collaborative spam: messageCount=" + involvedMessageIndices.size() + ", authorCount=" + involvedAuthors.size() + ", currentUserOnly=" + involvedAuthors.equals(Collections.singleton(currentAuthorId)));
+            }
+        }
+    }
+
+    /**
+     * Helper class to track message content with author information
+     */
+    private static class MessageWithAuthor {
+        String content;
+        String authorId;
+        long messageId;
+        
+        MessageWithAuthor(String content, String authorId, long messageId) {
+            this.content = content;
+            this.authorId = authorId;
+            this.messageId = messageId;
+        }
+    }
+
+    /**
+     * Detects collaborative spam where multiple users spell out a banned word across back-to-back messages (for MessageUpdateEvent).
+     * @param event The message update event
+     * @param currentMessageContent The current message being checked
+     * @param allHistory Historical messages from the channel (all users)
+     * @param config Server configuration
+     * @param serverId The server ID
+     */
+    private void checkForCollaborativeSpamUpdate(MessageUpdateEvent event, String currentMessageContent, List<Message> allHistory, App.ServerNode config, String serverId) {
+        if (App.DEBUG_MODE) {
+            System.out.println("[DEBUG-UPDATE] Checking for collaborative spam in message: \"" + currentMessageContent + "\"");
+            System.out.println("[DEBUG-UPDATE] Message history size: " + allHistory.size());
+        }
+        // Get the matcher for this server
+        AhoCorasickMatcher matcher = matcherCache.get(serverId);
+        if (matcher == null) {
+            if (App.DEBUG_MODE) System.out.println("[DEBUG-UPDATE] Matcher is null, returning");
+            return; // Matcher not initialized yet
+        }
+        
+        String currentAuthorId = event.getAuthor().getId();
+        long currentMessageId = event.getMessage().getIdLong();
+        
+        // Build a list of all messages with author tracking (including current message)
+        // Discord returns history in reverse chronological order (newest first), so iterate backwards
+        List<MessageWithAuthor> allMessages = new ArrayList<>();
+        
+        for (int i = allHistory.size() - 1; i >= 0; i--) {
+            Message msg = allHistory.get(i);
+            if (msg.getIdLong() != currentMessageId) {
+                String content = stripMarkdown(msg.getContentRaw());
+                if (!content.isEmpty()) {
+                    allMessages.add(new MessageWithAuthor(content, msg.getAuthor().getId(), msg.getIdLong()));
+                    if (App.DEBUG_MODE) {
+                        System.out.println("[DEBUG-UPDATE] History message: \"" + content + "\" from " + msg.getAuthor().getName());
+                    }
+                }
+            }
+        }
+        
+        // Add current message (use -1 as placeholder ID for unsaved current message)
+        allMessages.add(new MessageWithAuthor(currentMessageContent, currentAuthorId, currentMessageId));
+        if (App.DEBUG_MODE) {
+            System.out.println("[DEBUG-UPDATE] Current message: \"" + currentMessageContent + "\" from " + event.getAuthor().getName());
+            System.out.println("[DEBUG-UPDATE] Total messages to check: " + allMessages.size());
+        }
+        
+        // Build combined text and track character->message mapping
+        // Add space separators between messages to preserve word boundaries
+        StringBuilder combinedBuilder = new StringBuilder();
+        List<Integer> charToMessageIndex = new ArrayList<>();
+        
+        for (int idx = 0; idx < allMessages.size(); idx++) {
+            // Add space separator before each message (except first)
+            if (idx > 0 && combinedBuilder.length() > 0) {
+                combinedBuilder.append(" ");
+                charToMessageIndex.add(-1);  // -1 = separator, not part of any message
+            }
+            
+            MessageWithAuthor msg = allMessages.get(idx);
+            String stripped = stripMarkdown(msg.content).replaceAll("\\s+", "");
+            // Normalize before adding to combined string
+            String normalized = BannedWordScanner.normalizeForKeywordCheck(stripped);
+            if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG-UPDATE] Processing message " + idx + ": \"" + stripped + "\" -> normalized: \"" + normalized + "\"");
+            }
+            for (char c : normalized.toCharArray()) {
+                combinedBuilder.append(c);
+                charToMessageIndex.add(idx);
+            }
+        }
+        
+        // Combined string is already normalized (normalized each message individually)
+        String combined = combinedBuilder.toString();
+        if (App.DEBUG_MODE) {
+            System.out.println("[DEBUG-UPDATE] Combined string: \"" + combined + "\"");
+            System.out.println("[DEBUG-UPDATE] charToMessageIndex size: " + charToMessageIndex.size());
+        }
+        
+        if (combined.isEmpty()) {
+            if (App.DEBUG_MODE) System.out.println("[DEBUG-UPDATE] Combined string is empty");
+            return;
+        }
+        
+        Set<String> foundWords = matcher.findMatches(combined);
+        if (App.DEBUG_MODE) {
+            System.out.println("[DEBUG-UPDATE] Matches found before boundary check: " + foundWords);
+        }
+        
+        foundWords = filterByWordBoundary(combined, foundWords);
+        if (App.DEBUG_MODE) {
+            System.out.println("[DEBUG-UPDATE] Matches after boundary check: " + foundWords);
+        }
+        
+        if (foundWords.isEmpty()) {
+            if (App.DEBUG_MODE) System.out.println("[DEBUG-UPDATE] No matches found after word boundary filtering");
+            return;
+        }
+        
+        // Check if violations involve multiple authors
+        for (String bannedWord : foundWords) {
+            // Find position of this word in the combined string
+            int index = combined.indexOf(bannedWord);
+            if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG-UPDATE] Found banned word: \"" + bannedWord + "\" at index: " + index);
+            }
+            if (index == -1) {
+                continue;
+            }
+            
+            // Collect unique authors involved in this match
+            Set<String> involvedAuthors = new HashSet<>();
+            Set<Integer> involvedMessageIndices = new HashSet<>();
+            int matchEnd = Math.min(index + bannedWord.length(), charToMessageIndex.size());
+            
+            if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG-UPDATE] Match spans from " + index + " to " + matchEnd);
+            }
+            
+            for (int i = index; i < matchEnd && i < charToMessageIndex.size(); i++) {
+                int messageIdx = charToMessageIndex.get(i);
+                if (messageIdx >= 0 && messageIdx < allMessages.size()) {  // Skip separators (-1)
+                    involvedAuthors.add(allMessages.get(messageIdx).authorId);
+                    involvedMessageIndices.add(messageIdx);
+                    if (App.DEBUG_MODE) {
+                        System.out.println("[DEBUG-UPDATE] Character " + i + " belongs to message index " + messageIdx);
+                    }
+                }
+            }
+            
+            if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG-UPDATE] Involved authors: " + involvedAuthors + " (count: " + involvedAuthors.size() + ")");
+                System.out.println("[DEBUG-UPDATE] Involved message indices: " + involvedMessageIndices);
+                System.out.println("[DEBUG-UPDATE] Current author: " + currentAuthorId);
+            }
+            
+            // Only count as collaborative if 3+ messages are involved (prevents single-letter spam)
+            // AND 2+ users are involved AND current user wasn't the only one
+            if (involvedMessageIndices.size() >= 3 && involvedAuthors.size() >= 2 && !involvedAuthors.equals(Collections.singleton(currentAuthorId))) {
+                // Found collaborative spam!
+                Map<String, String> patternMap = patternToOriginalWordCache.get(serverId);
+                String originalWord = patternMap != null ? patternMap.get(bannedWord) : bannedWord;
+                
+                if (App.DEBUG_MODE) {
+                    System.out.println("[DEBUG-UPDATE] COLLABORATIVE SPAM DETECTED! Word: " + originalWord);
+                }
+                
+                // Delete messages involved in the spam (if configured)
+                if (config.config.delete_filtered_messages) {
+                    TextChannel channel = (TextChannel) event.getChannel();
+                    for (int msgIdx : involvedMessageIndices) {
+                        if (msgIdx >= 0 && msgIdx < allMessages.size()) {
+                            long messageIdToDelete = allMessages.get(msgIdx).messageId;
+                            try {
+                                channel.deleteMessageById(messageIdToDelete).queue(
+                                    success -> {
+                                        if (App.DEBUG_MODE) {
+                                            System.out.println("[DEBUG-UPDATE] Deleted collaborative spam message ID: " + messageIdToDelete);
+                                        }
+                                    },
+                                    error -> {
+                                        if (App.DEBUG_MODE) {
+                                            System.out.println("[DEBUG-UPDATE] Failed to delete message ID " + messageIdToDelete + ": " + error.getMessage());
+                                        }
+                                    }
+                                );
+                            } catch (Exception e) {
+                                System.err.println("[ERROR] Error queuing message delete: " + e.getMessage());
+                            }
+                        }
+                    }
+                }
+                
+                // Warn all involved authors and attempt timeouts (warnings sent from async callbacks)
+                for (String authorId : involvedAuthors) {
+                    String reason = "Collaborated to spell out banned word: " + originalWord;
+                    
+                    // Get the user's current infraction level to determine timeout duration
+                    int infractionLevel = 0;
+                    StatsManager.ServerStats serverStats = StatsManager.liveStats.get(serverId);
+                    if (serverStats != null) {
+                        StatsManager.MemberStats memberStats = serverStats.members.get(authorId);
+                        if (memberStats != null) {
+                            infractionLevel = memberStats.infractionLevel;
+                        }
+                    }
+                    
+                    // Calculate timeout duration based on current infraction level
+                    long timeoutDurationSeconds = getTimeoutDurationForLevel(infractionLevel, config.config.timeout_mode, config.config.timeout_base_seconds);
+                    
+                    // Attempt to timeout the user if configured and timeout duration > 0
+                    if (config.config.timeout_for_filtered_messages && timeoutDurationSeconds > 0) {
+                        try {
+                            net.dv8tion.jda.api.entities.Guild guild = event.getGuild();
+                            if (guild == null) {
+                                if (App.DEBUG_MODE) System.out.println("[DEBUG-UPDATE] Guild is null for collaborative spam timeout");
+                            } else {
+                                long authorIdLong = Long.parseLong(authorId);
+                                final String authorIdForCallback = authorId;  // For use in callback
+                                if (App.DEBUG_MODE) {
+                                    System.out.println("[DEBUG-UPDATE] Attempting to retrieve collaborator member (ID: " + authorIdLong + ") for timeout");
+                                }
+                                // Use retrieveMemberById (async API call) instead of getMemberById (cache-only)
+                                // This ensures we get the member even if not cached
+                                guild.retrieveMemberById(authorIdLong).queue(
+                                    member -> {
+                                        if (member.getUser().isBot()) {
+                                            if (App.DEBUG_MODE) System.out.println("[DEBUG-UPDATE] Cannot timeout bot user: " + member.getUser().getName());
+                                            // Send warning with no timeout
+                                            sendWarning(event.getJDA(), serverId, authorIdForCallback, "Collaborated to spell out banned word: " + originalWord, "Collaborative spam detected", false, timeoutDurationSeconds);
+                                        } else if (!guild.getSelfMember().canInteract(member)) {
+                                            if (App.DEBUG_MODE) System.out.println("[DEBUG-UPDATE] Cannot timeout " + member.getUser().getName() + " (insufficient permissions or admin)");
+                                            // Send warning with no timeout
+                                            sendWarning(event.getJDA(), serverId, authorIdForCallback, "Collaborated to spell out banned word: " + originalWord, "Collaborative spam detected", false, timeoutDurationSeconds);
+                                        } else {
+                                            if (App.DEBUG_MODE) {
+                                                System.out.println("[DEBUG-UPDATE] Attempting to timeout collaborator: " + member.getUser().getName() + " for " + timeoutDurationSeconds + " seconds");
+                                            }
+                                            member.timeoutFor(java.time.Duration.ofSeconds(timeoutDurationSeconds)).queue(
+                                                success -> {
+                                                    if (App.DEBUG_MODE) {
+                                                        System.out.println("[DEBUG-UPDATE] Successfully timed out collaborator: " + member.getUser().getName());
+                                                    }
+                                                    // Send warning with successful timeout
+                                                    sendWarning(event.getJDA(), serverId, authorIdForCallback, "Collaborated to spell out banned word: " + originalWord, "Collaborative spam detected", true, timeoutDurationSeconds);
+                                                    
+                                                    // Invoke punishment
+                                                    try {
+                                                        User user = event.getJDA().getUserById(authorIdForCallback);
+                                                        if (user != null) {
+                                                            PunishmentManager.invokePunishment(user, event.getGuild(), "Collaborated to spell out banned word: " + originalWord);
+                                                            if (App.DEBUG_MODE) {
+                                                                System.out.println("[DEBUG-UPDATE] Punishment invoked for collaborator: " + user.getName());
+                                                            }
+                                                        }
+                                                    } catch (Exception e) {
+                                                        System.err.println("[ERROR] Failed to invoke punishment for collaborator: " + e.getMessage());
+                                                        e.printStackTrace();
+                                                    }
+                                                },
+                                                error -> {
+                                                    System.err.println("[ERROR] Failed to timeout collaborator " + member.getUser().getName() + ": " + error.getMessage());
+                                                    if (App.DEBUG_MODE) {
+                                                        error.printStackTrace();
+                                                    }
+                                                    // Send warning with failed timeout
+                                                    sendWarning(event.getJDA(), serverId, authorIdForCallback, "Collaborated to spell out banned word: " + originalWord, "Collaborative spam detected", false, timeoutDurationSeconds);
+                                                    
+                                                    // Invoke punishment anyway
+                                                    try {
+                                                        User user = event.getJDA().getUserById(authorIdForCallback);
+                                                        if (user != null) {
+                                                            PunishmentManager.invokePunishment(user, event.getGuild(), "Collaborated to spell out banned word: " + originalWord);
+                                                            if (App.DEBUG_MODE) {
+                                                                System.out.println("[DEBUG-UPDATE] Punishment invoked for collaborator: " + user.getName());
+                                                            }
+                                                        }
+                                                    } catch (Exception e) {
+                                                        System.err.println("[ERROR] Failed to invoke punishment for collaborator: " + e.getMessage());
+                                                        e.printStackTrace();
+                                                    }
+                                                }
+                                            );
+                                        }
+                                    },
+                                    memberError -> {
+                                        System.err.println("[ERROR] Failed to retrieve collaborator member ID " + authorIdLong + ": " + memberError.getMessage());
+                                        if (App.DEBUG_MODE) {
+                                            memberError.printStackTrace();
+                                        }
+                                    }
+                                );
+                            }
+                        } catch (NumberFormatException e) {
+                            System.err.println("[ERROR] Invalid author ID format: " + authorId);
+                        } catch (Exception e) {
+                            System.err.println("[ERROR] Exception while attempting to timeout collaborator: " + e.getMessage());
+                            e.printStackTrace();
+                        }
+                    }
+                }
+                
+                if (App.DEBUG_MODE) {
+                    System.out.println("[DEBUG-UPDATE] Detected collaborative spam: " + originalWord + " from users: " + involvedAuthors);
+                }
+            } else if (App.DEBUG_MODE) {
+                System.out.println("[DEBUG-UPDATE] Not collaborative spam: messageCount=" + involvedMessageIndices.size() + ", authorCount=" + involvedAuthors.size() + ", currentUserOnly=" + involvedAuthors.equals(Collections.singleton(currentAuthorId)));
+            }
+        }
     }
 }
