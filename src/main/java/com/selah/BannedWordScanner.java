@@ -698,13 +698,19 @@ public class BannedWordScanner {
                 .replace('є', 'e').replace('Є', 'e') // Cyrillic ie (Ukrainian)
                 // Armenian
                 .replace('ա', 'a').replace('Ա', 'a').replace('ե', 'e').replace('Ե', 'e')
-                .replace('ի', 'i').replace('Ի', 'i').replace('ո', 'o').replace('Ո', 'o')
+                .replace('ի', 'i').replace('Ի', 'r').replace('ո', 'o').replace('Ո', 'o')
                 .replace('ւ', 'u').replace('Ւ', 'u').replace('ռ', 'n').replace('Ռ', 'n')
                 .replace('ս', 's').replace('Ս', 's').replace('գ', 'g').replace('Գ', 'g')
                 .replace('տ', 't').replace('Տ', 't').replace('կ', 'k').replace('Կ', 'k')
                 .replace('ր', 'r').replace('Ր', 'r').replace('բ', 'b').replace('Բ', 'b')
+                // Ge'ez (Ethiopic) script
+                .replace('ኸ', 'n').replace('ሸ', 's').replace('ስ', 's').replace('ር', 'r')
+                .replace('ሐ', 'h').replace('ሓ', 'h').replace('ሑ', 'h').replace('ሒ', 'h')
+                .replace('ኢ', 'i').replace('ኣ', 'a').replace('ኤ', 'e').replace('እ', 'o')
+                .replace('ኦ', 'o').replace('ኧ', 'a').replace('ወ', 'w').replace('ዪ', 'i')
                 // Greek
                 .replace('α', 'a').replace('Α', 'a').replace('ν', 'n').replace('Ν', 'n')
+                .replace('π', 'n').replace('Π', 'n') // Greek pi looks like 'n'
                 .replace('ο', 'o').replace('Ο', 'o').replace('ρ', 'p').replace('Ρ', 'p')
                 .replace('σ', 's').replace('ς', 's').replace('Σ', 's') // Greek sigma (all forms)
                 .replace('τ', 't').replace('Τ', 't').replace('γ', 'g').replace('Γ', 'g')
@@ -721,7 +727,7 @@ public class BannedWordScanner {
                 .replace('Ι', 'i').replace('И', 'i') // Cyrillic I
                 .replace('Й', 'y').replace('й', 'y') // Cyrillic short I (looks like Y)
                 .replace('Ф', 'f').replace('ф', 'f') // Cyrillic F (Cyrillic Fe)
-                .replace('Д', 'd').replace('д', 'd') // Cyrillic D (De)
+                .replace('Д', 'a').replace('д', 'a') // Cyrillic D (looks like 'a' when used as evasion)
                 .replace('Ь', 'b').replace('ь', 'b') // Cyrillic soft sign (could confuse with B)
                 .replace('Ъ', 'b').replace('ъ', 'b') // Cyrillic hard sign (could confuse with B)
                 .replace('З', 'z').replace('з', 'z'); // Cyrillic Z (already had some mappings)
@@ -749,11 +755,80 @@ public class BannedWordScanner {
                 .replace('ú', 'u').replace('ù', 'u').replace('ü', 'u').replace('û', 'u')
                 .replace('ý', 'y').replace('ỳ', 'y').replace('ÿ', 'y')
                 .replace('ñ', 'n').replace('ń', 'n')
+                .replace('Ṅ', 'n').replace('ṅ', 'n').replace('Ṇ', 'n').replace('ṇ', 'n') // N with dot above/below
+                .replace('Ṉ', 'n').replace('ṉ', 'n').replace('Ṋ', 'n').replace('ṋ', 'n') // N with dot below/macron
+                .replace('ⓝ', 'n').replace('⒩', 'n') // Circled and parenthesized n/N
+                .replace('ℕ', 'n') // Mathematical Double-Struck N
+                .replace('₦', 'n') // Naira sign (lookalike)
+                .replace('ℵ', 'n') // Hebrew Aleph (looks like N)
+                .replace('സ', 'n').replace('ന', 'n') // Malayalam characters
+                .replace('൩', 'n') // Malayalam digit
+                // Greek eta and variants (all look like 'n')
+                .replace('η', 'n').replace('Η', 'n')
+                .replace('ἠ', 'n').replace('ἡ', 'n').replace('ἢ', 'n').replace('ἣ', 'n')
+                .replace('ἤ', 'n').replace('ἥ', 'n').replace('ἦ', 'n').replace('ἧ', 'n')
+                .replace('ὴ', 'n').replace('ή', 'n')
+                .replace('ᾐ', 'n').replace('ᾑ', 'n').replace('ᾒ', 'n').replace('ᾓ', 'n')
+                .replace('ᾔ', 'n').replace('ᾕ', 'n').replace('ᾖ', 'n').replace('ᾗ', 'n')
+                .replace('ῂ', 'n').replace('ῃ', 'n').replace('ῄ', 'n')
+                .replace('ῆ', 'n').replace('ῇ', 'n')
                 .replace('ç', 'c').replace('č', 'c')
-                .replace('ř', 'r').replace('ŕ', 'r')
+                .replace('ř', 'r').replace('ŕ', 'r').replace('Ṙ', 'r').replace('ṙ', 'r') // R with dot above
+                .replace('Ṛ', 'r').replace('ṛ', 'r').replace('Ṝ', 'r').replace('ṝ', 'r') // R with dot below
+                .replace('Ṟ', 'r').replace('ṟ', 'r') // R with dot below and macron
+                .replace('ⓡ', 'r').replace('⒭', 'r') // Circled and parenthesized r
+                .replace('ℛ', 'r').replace('ℜ', 'r').replace('ℝ', 'r').replace('℟', 'r') // Mathematical R variants
                 .replace('š', 's').replace('ş', 's')
                 .replace('ť', 't').replace('ţ', 't')
-                .replace('ž', 'z').replace('ź', 'z');
+                .replace('ž', 'z').replace('ź', 'z')
+                // G/g variants - extensive coverage
+                .replace('ⓖ', 'g').replace('⒢', 'g') // Circled and parenthesized g/G
+                .replace('❡', 'g') // Symbol variant
+                .replace('ḡ', 'g').replace('Ḡ', 'g') // G with macron
+                .replace('ℊ', 'g') // Mathematical script g
+                // I/i variants - extensive coverage
+                .replace('ⓘ', 'i').replace('⒤', 'i') // Circled and parenthesized i
+                .replace('ї', 'i').replace('Ї', 'i') // Cyrillic yi
+                .replace('유', 'i') // Korean character
+                .replace('ḭ', 'i').replace('Ḭ', 'i') // I with macron below
+                .replace('ḯ', 'i').replace('Ḯ', 'i') // I with diaeresis and acute
+                .replace('ỉ', 'i').replace('Ỉ', 'i') // I with hook above
+                .replace('ị', 'i').replace('Ị', 'i') // I with dot below
+                .replace('ℐ', 'i') // Mathematical italic I
+                // Greek iota and variants (all lowercase forms)
+                .replace('ἰ', 'i').replace('ἱ', 'i').replace('ἲ', 'i').replace('ἳ', 'i')
+                .replace('ἴ', 'i').replace('ἵ', 'i').replace('ἶ', 'i').replace('ἷ', 'i')
+                .replace('ῐ', 'i').replace('ῑ', 'i').replace('ῒ', 'i').replace('ΐ', 'i')
+                .replace('ῖ', 'i').replace('ῗ', 'i').replace('ὶ', 'i').replace('ί', 'i')
+                // Greek Iota and variants (uppercase forms)
+                .replace('Ἰ', 'i').replace('Ἱ', 'i').replace('Ἲ', 'i').replace('Ἳ', 'i')
+                .replace('Ἴ', 'i').replace('Ἵ', 'i').replace('Ἶ', 'i').replace('Ἷ', 'i')
+                .replace('Ῐ', 'i').replace('Ῑ', 'i').replace('Ὶ', 'i').replace('Ί', 'i')
+                // E/e variants - comprehensive coverage
+                .replace('ⓔ', 'e').replace('⒠', 'e') // Circled and parenthesized e
+                .replace('ℯ', 'e').replace('ℰ', 'e').replace('ℇ', 'e') // Mathematical e variants
+                .replace('∊', 'e').replace('∃', 'e') // Set theory symbols (lookalikes)
+                .replace('€', 'e') // Euro sign (looks like E)
+                // e variants with diacritics
+                .replace('ḕ', 'e').replace('Ḕ', 'e') // E with macron and grave
+                .replace('ḗ', 'e').replace('Ḗ', 'e') // E with macron and acute
+                .replace('ḙ', 'e').replace('Ḙ', 'e') // E with circumflex below
+                .replace('ḛ', 'e').replace('Ḛ', 'e') // E with tilde below
+                .replace('ḝ', 'e').replace('Ḝ', 'e') // E with cedilla
+                .replace('ẹ', 'e').replace('Ẹ', 'e') // E with dot below
+                .replace('ẻ', 'e').replace('Ẻ', 'e') // E with hook above
+                .replace('ẽ', 'e').replace('Ẽ', 'e') // E with tilde
+                .replace('ế', 'e').replace('Ế', 'e') // E with circumflex and acute
+                .replace('ề', 'e').replace('Ề', 'e') // E with circumflex and grave
+                .replace('ể', 'e').replace('Ể', 'e') // E with circumflex and hook above
+                .replace('ễ', 'e').replace('Ễ', 'e') // E with circumflex and tilde
+                .replace('ệ', 'e').replace('Ệ', 'e') // E with circumflex and dot below
+                // Greek epsilon and variants (lowercase)
+                .replace('ἐ', 'e').replace('ἑ', 'e').replace('ἒ', 'e').replace('ἓ', 'e')
+                .replace('ἔ', 'e').replace('ἕ', 'e').replace('ὲ', 'e').replace('έ', 'e')
+                // Greek Epsilon and variants (uppercase)
+                .replace('Ἐ', 'e').replace('Ἑ', 'e').replace('Ἒ', 'e').replace('Ἓ', 'e')
+                .replace('Ἔ', 'e').replace('Ἕ', 'e').replace('Ὲ', 'e').replace('Έ', 'e');
         
         // Convert to lowercase and apply character substitutions
         return normalized.toLowerCase()

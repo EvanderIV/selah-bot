@@ -380,6 +380,8 @@ public class App {
                                 "    \"warning_channel_id\": \"\",\n" +
                                 "    \"alert_cooldown_seconds\": 60,\n" +
                                 "    \"save_interval\": 5,\n" +
+                                "    \"timeout_mode\": \"flat\",\n" +
+                                "    \"timeout_base_seconds\": 60,\n" +
                                 "    \"banned_words\": [\n" +
                                 "      \"niggerlicious\",\n" +
                                 "      \"niggalicious\",\n" +
@@ -391,6 +393,8 @@ public class App {
                                 "      \"neggaaura\",\n" +
                                 "      \"nigger\",\n" +
                                 "      \"negger\",\n" +
+                                "      \"niggar\",\n" +
+                                "      \"neggar\",\n" +
                                 "      \"nigga\",\n" +
                                 "      \"negga\",\n" +
                                 "      \"faggot\",\n" +
