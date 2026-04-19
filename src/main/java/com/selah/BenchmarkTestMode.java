@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Random;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import com.google.gson.Gson;
@@ -147,7 +148,8 @@ public class BenchmarkTestMode {
     private static void runBenchmark(String message, String serverId) {
         System.out.println("\n========== BENCHMARK RESULTS ==========");
         System.out.println("Input message: " + message);
-        System.out.println("Message length: " + message.length() + " characters\n");
+        System.out.println("Message length: " + message.length() + " characters");
+        System.out.println("Diet mode: " + App.DIET_MODE + "\n");
         
         // Get banned words for this specific server (just like the normal bot does)
         App.ServerNode serverNode = App.guildConfigs.get(serverId);
@@ -159,52 +161,52 @@ public class BenchmarkTestMode {
         List<String> bannedWords = serverNode.config.banned_words;
         System.out.println("Testing against " + bannedWords.size() + " banned words configured for this server\n");
         
-        // Test 1: Normalization
-        long start = System.nanoTime();
-        String normalized = BannedWordScanner.normalizeForKeywordCheck(message);
-        long normTime = System.nanoTime() - start;
+        // Replicate the exact logic from ModerationListener.checkBannedWordsInMessage
+        // For messages >= 10 chars, skip context checks (major optimization)
+        boolean shouldCheckContext = !App.DIET_MODE && message.length() < 10;
         
-        // Test 2: Full ban checking (all words)
-        start = System.nanoTime();
-        boolean found = false;
+        System.out.println("========== CONFIGURATION ==========");
+        System.out.println("Should check context: " + shouldCheckContext);
+        System.out.println("(Context checks skipped for long messages to avoid excess API calls)\n");
+        
+        // Timing: Full scan matching ModerationListener logic
+        long start = System.nanoTime();
         int matchCount = 0;
+        List<String> matchedWords = new ArrayList<>();
+        
         for (String bannedWord : bannedWords) {
-            if (BannedWordScanner.isBannedWordPresent(message, bannedWord)) {
-                found = true;
+            // Check current message
+            boolean foundInCurrentMessage = BannedWordScanner.isBannedWordPresent(message, bannedWord);
+            
+            boolean foundWithContext = false;
+            boolean foundWithContextNoSpaces = false;
+            
+            // Only check context variations if enabled AND current message was clean AND message is short
+            if (shouldCheckContext && !foundInCurrentMessage) {
+                // In a real scenario, messageWithContext would include previous messages
+                // For this benchmark, we'll skip it since there's no previous message context
+                foundWithContext = false;
+                foundWithContextNoSpaces = false;
+            }
+            
+            if (foundInCurrentMessage || foundWithContext || foundWithContextNoSpaces) {
                 matchCount++;
+                matchedWords.add(bannedWord);
             }
         }
         long scanTime = System.nanoTime() - start;
         
-        // Test 3: Grammar variants generation
-        long variantTime = 0;
-        if (matchCount > 0) {
-            start = System.nanoTime();
-            for (String word : bannedWords) {
-                List<String> variants = BannedWordScanner.generateGrammarVariants(word);
-                // Just generating, not checking
-            }
-            variantTime = System.nanoTime() - start;
-        }
-        
         // Print results
         System.out.println("========== TIMING BREAKDOWN ==========");
-        System.out.printf("Normalization: %.4f ms%n", normTime / 1_000_000.0);
         System.out.printf("Full scanning (all words): %.4f ms%n", scanTime / 1_000_000.0);
         System.out.printf("Average per banned word: %.4f ms%n", (scanTime / 1_000_000.0) / bannedWords.size());
-        if (matchCount > 0) {
-            System.out.printf("Grammar variants generation: %.4f ms%n", variantTime / 1_000_000.0);
-        }
         
         System.out.println("\n========== RESULTS ==========");
-        System.out.println("Normalized message: " + normalized);
         System.out.println("Total matches found: " + matchCount);
         if (matchCount > 0) {
             System.out.println("Matching words:");
-            for (String bannedWord : bannedWords) {
-                if (BannedWordScanner.isBannedWordPresent(message, bannedWord)) {
-                    System.out.println("  - " + bannedWord);
-                }
+            for (String word : matchedWords) {
+                System.out.println("  - " + word);
             }
         }
         
@@ -219,8 +221,10 @@ public class BenchmarkTestMode {
         }
         
         System.out.println("\n========== PERFORMANCE METRICS ==========");
-        System.out.printf("Messages per second (single): %.0f%n", 1000 / totalMs);
-        System.out.printf("Words per millisecond: %.2f%n", bannedWords.size() / totalMs);
+        if (totalMs > 0) {
+            System.out.printf("Messages per second (single): %.0f%n", 1000 / totalMs);
+            System.out.printf("Words per millisecond: %.2f%n", bannedWords.size() / totalMs);
+        }
         
         System.out.println();
     }
