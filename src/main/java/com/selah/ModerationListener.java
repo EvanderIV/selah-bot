@@ -32,6 +32,15 @@ public class ModerationListener extends ListenerAdapter {
     // Key: serverId, Value: AhoCorasickMatcher for that server's banned words
     private static final Map<String, AhoCorasickMatcher> matcherCache = new HashMap<>();
     
+    // Static cache mapping matched patterns back to their original banned words
+    // Key: serverId, Value: Map of (matched pattern → original banned word from config)
+    // Used to display the original word in warnings, not the normalized/spaced variant that caught it
+    private static final Map<String, Map<String, String>> patternToOriginalWordCache = new HashMap<>();
+    
+    // Static cache for heat keyword matchers (single global matcher for all heat keywords)
+    private static HeatKeywordMatcher heatKeywordMatcher = null;
+    private static HeatKeywordMatcher safeWordMatcher = null;
+    
     // Static map to track the last time an alert was sent per channel
     // Key format: "serverId:channelId"
     private static final Map<String, Long> lastAlertTime = new HashMap<>();
@@ -361,12 +370,18 @@ public class ModerationListener extends ListenerAdapter {
             textChannel.getHistory().retrievePast(historicalDepth + 1).queue(
                 history -> {
                     // Process with context asynchronously
-                    if (history.size() > 1) {
+                    if (history.size() > 0) {
                         StringBuilder contextBuilder = new StringBuilder();
+                        long currentMessageId = event.getMessage().getIdLong();
                         
                         // Iterate from the end of history (oldest) to beginning (newest, just before current)
-                        for (int i = history.size() - 1; i >= 1; i--) {
-                            String previousContent = history.get(i).getContentRaw();
+                        for (int i = history.size() - 1; i >= 0; i--) {
+                            Message historyMessage = history.get(i);
+                            // Skip the current message if it appears in history (prevents duplication)
+                            if (historyMessage.getIdLong() == currentMessageId) {
+                                continue;
+                            }
+                            String previousContent = historyMessage.getContentRaw();
                             previousContent = stripMarkdown(previousContent);
                             
                             if (!previousContent.isEmpty()) {
@@ -406,11 +421,47 @@ public class ModerationListener extends ListenerAdapter {
     private boolean checkBannedWordsInMessage(MessageReceivedEvent event, String messageContent, String messageWithContext, App.ServerNode config, String serverId) {
         
         // Get or create Aho-Corasick matcher for this server (cached for reuse)
-        AhoCorasickMatcher matcher = matcherCache.computeIfAbsent(serverId, 
-            k -> new AhoCorasickMatcher(config.config.banned_words));
+        AhoCorasickMatcher matcher = matcherCache.computeIfAbsent(serverId, k -> {
+            // Expand banned words to include grammatical variants (plural, possessive, past tense, gerund)
+            // AND space-inserted variants (catches back-to-back messages like "f" + "a" + "g" = "f a g")
+            List<String> expandedWords = new ArrayList<>();
+            Map<String, String> patternMap = new HashMap<>();
+            
+            for (String word : config.config.banned_words) {
+                // CRITICAL: Normalize banned words before adding to matcher to match normalized text
+                String normalizedWord = BannedWordScanner.normalizeForKeywordCheck(word);
+                
+                // Add base word and grammar variants
+                expandedWords.add(normalizedWord);
+                patternMap.put(normalizedWord, word);  // Map normalized pattern back to original
+                
+                List<String> grammarVariants = BannedWordScanner.generateGrammarVariants(normalizedWord);
+                for (String variant : grammarVariants) {
+                    expandedWords.add(variant);
+                    patternMap.put(variant, word);  // Map grammar variant back to original
+                    
+                    // Add space-inserted variants for all grammar variants
+                    // This catches back-to-back messages: "f" + "a" + "g" → "f a g"
+                    for (String spaceVariant : BannedWordScanner.generateSpaceVariants(variant)) {
+                        expandedWords.add(spaceVariant);
+                        patternMap.put(spaceVariant, word);  // Map space variant back to original
+                    }
+                }
+            }
+            
+            // Cache the pattern-to-original mapping for later lookup
+            patternToOriginalWordCache.put(serverId, patternMap);
+            return new AhoCorasickMatcher(expandedWords);
+        });
+        
+        // Normalize message BEFORE checking (handles Unicode evasion variants like 𝐍𝚒𝔤𝔾𝕖𝓻)
+        String normalizedMessage = BannedWordScanner.normalizeForKeywordCheck(messageContent);
         
         // Check current message with Aho-Corasick (O(n) instead of O(n*p))
-        Set<String> foundInCurrentMessage = matcher.findMatches(messageContent);
+        Set<String> foundInCurrentMessage = matcher.findMatches(normalizedMessage);
+        
+        // Filter to only valid word boundary matches (prevents "fag" matching in "staffage")
+        foundInCurrentMessage = filterByWordBoundary(normalizedMessage, foundInCurrentMessage);
         
         // If found in current message, process immediately
         if (!foundInCurrentMessage.isEmpty()) {
@@ -421,31 +472,39 @@ public class ModerationListener extends ListenerAdapter {
             }
         }
         
-        // Only check context variations if:
-        // 1. Diet mode is disabled
-        // 2. Current message was clean
-        // 3. Message is short enough that we would have fetched context (<10 chars)
-        boolean shouldCheckContext = !App.DIET_MODE && foundInCurrentMessage.isEmpty() && messageContent.length() < 10;
-        
-        if (shouldCheckContext) {
-            // Check context with Aho-Corasick
-            Set<String> foundWithContext = matcher.findMatches(messageWithContext);
+        // Check context if current message was clean AND message is short
+        // (short messages are likely part of a split-word evasion attempt like "f" + "a" + "g")
+        if (messageWithContext.length() > messageContent.length()) {
+            // We have context (previous messages exist)
             
-            if (!foundWithContext.isEmpty()) {
-                for (String bannedWord : foundWithContext) {
-                    if (processBannedWord(event, messageWithContext, config, serverId, bannedWord)) {
-                        return true;
+            // First, check context WITH spaces preserved (for catching normal violations in history)
+            if (config.config.delete_filtered_messages) {
+                String normalizedContext = BannedWordScanner.normalizeForKeywordCheck(messageWithContext);
+                Set<String> foundWithContext = matcher.findMatches(normalizedContext);
+                foundWithContext = filterByWordBoundary(normalizedContext, foundWithContext);
+                
+                if (!foundWithContext.isEmpty()) {
+                    for (String bannedWord : foundWithContext) {
+                        if (processBannedWord(event, messageWithContext, config, serverId, bannedWord)) {
+                            return true;
+                        }
                     }
                 }
             }
             
-            // Also check for split words with spaces removed
+            // ALWAYS check for split words with spaces removed (catches "f" + "a" + "g" = "fag")
+            // This applies regardless of deletion setting because it's only checking the CURRENT
+            // message combined with context, not checking historical messages independently
             String messageWithContextNoSpaces = messageWithContext.replaceAll("\\s+", "");
-            Set<String> foundWithContextNoSpaces = matcher.findMatches(messageWithContextNoSpaces);
+            String normalizedNoSpaces = BannedWordScanner.normalizeForKeywordCheck(messageWithContextNoSpaces);
+            Set<String> foundWithContextNoSpaces = matcher.findMatches(normalizedNoSpaces);
+            
+            foundWithContextNoSpaces = filterByWordBoundary(normalizedNoSpaces, foundWithContextNoSpaces);
             
             if (!foundWithContextNoSpaces.isEmpty()) {
                 for (String bannedWord : foundWithContextNoSpaces) {
-                    if (processBannedWord(event, messageWithContextNoSpaces, config, serverId, bannedWord)) {
+                    // Report the original message content, not the no-spaces version (detection only)
+                    if (processBannedWord(event, messageContent, config, serverId, bannedWord)) {
                         return true;
                     }
                 }
@@ -500,7 +559,10 @@ public class ModerationListener extends ListenerAdapter {
         }
         
         // Send warning for any detection (include full message content and timeout status)
-        String reason = "Used or attempted to use banned word: " + bannedWord;
+        // Look up the original banned word from the pattern mapping
+        Map<String, String> patternMap = patternToOriginalWordCache.get(serverId);
+        String originalWord = patternMap != null ? patternMap.get(bannedWord) : bannedWord;
+        String reason = "Used or attempted to use banned word: " + originalWord;
         sendWarning(event.getJDA(), serverId, userId, reason, messageContent, timeoutApplied, timeoutDurationSeconds);
         
         // Delete the message AFTER sending the warning (send is async, so this queues the delete after)
@@ -559,12 +621,18 @@ public class ModerationListener extends ListenerAdapter {
             textChannel.getHistory().retrievePast(historicalDepth + 1).queue(
                 history -> {
                     // Process with context asynchronously
-                    if (history.size() > 1) {
+                    if (history.size() > 0) {
                         StringBuilder contextBuilder = new StringBuilder();
+                        long currentMessageId = event.getMessage().getIdLong();
                         
                         // Iterate from the end of history (oldest) to beginning (newest, just before current)
-                        for (int i = history.size() - 1; i >= 1; i--) {
-                            String previousContent = history.get(i).getContentRaw();
+                        for (int i = history.size() - 1; i >= 0; i--) {
+                            Message historyMessage = history.get(i);
+                            // Skip the current message if it appears in history (prevents duplication)
+                            if (historyMessage.getIdLong() == currentMessageId) {
+                                continue;
+                            }
+                            String previousContent = historyMessage.getContentRaw();
                             previousContent = stripMarkdown(previousContent);
                             
                             if (!previousContent.isEmpty()) {
@@ -604,11 +672,47 @@ public class ModerationListener extends ListenerAdapter {
     private boolean checkBannedWordsInMessageUpdate(MessageUpdateEvent event, String messageContent, String messageWithContext, App.ServerNode config, String serverId) {
         
         // Get or create Aho-Corasick matcher for this server (cached for reuse)
-        AhoCorasickMatcher matcher = matcherCache.computeIfAbsent(serverId, 
-            k -> new AhoCorasickMatcher(config.config.banned_words));
+        AhoCorasickMatcher matcher = matcherCache.computeIfAbsent(serverId, k -> {
+            // Expand banned words to include grammatical variants (plural, possessive, past tense, gerund)
+            // AND space-inserted variants (catches back-to-back messages like "f" + "a" + "g" = "f a g")
+            List<String> expandedWords = new ArrayList<>();
+            Map<String, String> patternMap = new HashMap<>();
+            
+            for (String word : config.config.banned_words) {
+                // CRITICAL: Normalize banned words before adding to matcher to match normalized text
+                String normalizedWord = BannedWordScanner.normalizeForKeywordCheck(word);
+                
+                // Add base word and grammar variants
+                expandedWords.add(normalizedWord);
+                patternMap.put(normalizedWord, word);  // Map normalized pattern back to original
+                
+                List<String> grammarVariants = BannedWordScanner.generateGrammarVariants(normalizedWord);
+                for (String variant : grammarVariants) {
+                    expandedWords.add(variant);
+                    patternMap.put(variant, word);  // Map grammar variant back to original
+                    
+                    // Add space-inserted variants for all grammar variants
+                    // This catches back-to-back messages: "f" + "a" + "g" → "f a g"
+                    for (String spaceVariant : BannedWordScanner.generateSpaceVariants(variant)) {
+                        expandedWords.add(spaceVariant);
+                        patternMap.put(spaceVariant, word);  // Map space variant back to original
+                    }
+                }
+            }
+            
+            // Cache the pattern-to-original mapping for later lookup
+            patternToOriginalWordCache.put(serverId, patternMap);
+            return new AhoCorasickMatcher(expandedWords);
+        });
+        
+        // Normalize message BEFORE checking (handles Unicode evasion variants like 𝐍𝚒𝔤𝔾𝕖𝓻)
+        String normalizedMessage = BannedWordScanner.normalizeForKeywordCheck(messageContent);
         
         // Check current message with Aho-Corasick (O(n) instead of O(n*p))
-        Set<String> foundInCurrentMessage = matcher.findMatches(messageContent);
+        Set<String> foundInCurrentMessage = matcher.findMatches(normalizedMessage);
+        
+        // Filter to only valid word boundary matches (prevents "fag" matching in "staffage")
+        foundInCurrentMessage = filterByWordBoundary(normalizedMessage, foundInCurrentMessage);
         
         // If found in current message, process immediately
         if (!foundInCurrentMessage.isEmpty()) {
@@ -619,31 +723,39 @@ public class ModerationListener extends ListenerAdapter {
             }
         }
         
-        // Only check context variations if:
-        // 1. Diet mode is disabled
-        // 2. Current message was clean
-        // 3. Message is short enough that we would have fetched context (<10 chars)
-        boolean shouldCheckContext = !App.DIET_MODE && foundInCurrentMessage.isEmpty() && messageContent.length() < 10;
-        
-        if (shouldCheckContext) {
-            // Check context with Aho-Corasick
-            Set<String> foundWithContext = matcher.findMatches(messageWithContext);
+        // Check context if current message was clean AND message is short
+        // (short messages are likely part of a split-word evasion attempt like "f" + "a" + "g")
+        if (messageWithContext.length() > messageContent.length()) {
+            // We have context (previous messages exist)
             
-            if (!foundWithContext.isEmpty()) {
-                for (String bannedWord : foundWithContext) {
-                    if (processBannedWordUpdate(event, messageWithContext, config, serverId, bannedWord)) {
-                        return true;
+            // First, check context WITH spaces preserved (for catching normal violations in history)
+            if (config.config.delete_filtered_messages) {
+                String normalizedContext = BannedWordScanner.normalizeForKeywordCheck(messageWithContext);
+                Set<String> foundWithContext = matcher.findMatches(normalizedContext);
+                foundWithContext = filterByWordBoundary(normalizedContext, foundWithContext);
+                
+                if (!foundWithContext.isEmpty()) {
+                    for (String bannedWord : foundWithContext) {
+                        if (processBannedWordUpdate(event, messageWithContext, config, serverId, bannedWord)) {
+                            return true;
+                        }
                     }
                 }
             }
             
-            // Also check for split words with spaces removed
+            // ALWAYS check for split words with spaces removed (catches "f" + "a" + "g" = "fag")
+            // This applies regardless of deletion setting because it's only checking the CURRENT
+            // message combined with context, not checking historical messages independently
             String messageWithContextNoSpaces = messageWithContext.replaceAll("\\s+", "");
-            Set<String> foundWithContextNoSpaces = matcher.findMatches(messageWithContextNoSpaces);
+            String normalizedNoSpaces = BannedWordScanner.normalizeForKeywordCheck(messageWithContextNoSpaces);
+            Set<String> foundWithContextNoSpaces = matcher.findMatches(normalizedNoSpaces);
+            
+            foundWithContextNoSpaces = filterByWordBoundary(normalizedNoSpaces, foundWithContextNoSpaces);
             
             if (!foundWithContextNoSpaces.isEmpty()) {
                 for (String bannedWord : foundWithContextNoSpaces) {
-                    if (processBannedWordUpdate(event, messageWithContextNoSpaces, config, serverId, bannedWord)) {
+                    // Report the original message content, not the no-spaces version (detection only)
+                    if (processBannedWordUpdate(event, messageContent, config, serverId, bannedWord)) {
                         return true;
                     }
                 }
@@ -698,7 +810,10 @@ public class ModerationListener extends ListenerAdapter {
         }
         
         // Send warning for any detection (include full message content and timeout status)
-        String reason = "Used or attempted to use banned word: " + bannedWord;
+        // Look up the original banned word from the pattern mapping
+        Map<String, String> patternMap = patternToOriginalWordCache.get(serverId);
+        String originalWord = patternMap != null ? patternMap.get(bannedWord) : bannedWord;
+        String reason = "Used or attempted to use banned word: " + originalWord;
         sendWarning(event.getJDA(), serverId, userId, reason, messageContent, timeoutApplied, timeoutDurationSeconds);
         
         // Delete the message AFTER sending the warning (send is async, so this queues the delete after)
@@ -915,34 +1030,70 @@ public class ModerationListener extends ListenerAdapter {
 
     private static double checkKeywords(String message) {
         double heat = 0;
-        List<Keyword> foundKeywords = new ArrayList<>();
-        List<Keyword> foundSafeWords = new ArrayList<>();
         String normalizedMessage = BannedWordScanner.normalizeForKeywordCheck(message);
 
         if (App.DEBUG_MODE) {
             System.out.println("[DEBUG] Normalized message for keyword check: \"" + normalizedMessage + "\"");
         }
 
-        // Check for standard keywords
-        for (Keyword keyword : KeywordManager.keywords) {
-            // Use word boundaries to match whole words
-            String pattern = "\\b" + keyword.word + "\\b";
-            if (getPattern(pattern, 0).matcher(normalizedMessage).find()) {
-                foundKeywords.add(keyword);
-                heat += keyword.heat;
-            } else if (normalizedMessage.contains(keyword.word)) {
-                // If it's part of another word, add a reduced heat
-                foundKeywords.add(new Keyword(keyword.word + "*", 0.2));
-                heat += 0.2;
-            }
+        // Initialize heat keyword matchers on first use (lazy initialization)
+        if (heatKeywordMatcher == null && !KeywordManager.keywords.isEmpty()) {
+            heatKeywordMatcher = new HeatKeywordMatcher(KeywordManager.keywords);
+        }
+        if (safeWordMatcher == null && !KeywordManager.safeWords.isEmpty()) {
+            safeWordMatcher = new HeatKeywordMatcher(KeywordManager.safeWords);
         }
 
-        // Check for safe words and reduce heat
-        for (Keyword safeWord : KeywordManager.safeWords) {
-            if (normalizedMessage.contains(safeWord.word)) {
-                foundSafeWords.add(safeWord);
-                heat += safeWord.heat; // Add the negative heat value
+        // Use Aho-Corasick to find all keyword matches in a single pass (O(n) instead of O(n*p))
+        List<Keyword> foundKeywords = new ArrayList<>();
+        List<Keyword> foundSafeWords = new ArrayList<>();
+        
+        if (heatKeywordMatcher != null) {
+            foundKeywords = heatKeywordMatcher.findWholeWordMatches(normalizedMessage);
+            
+            // Also check for partial matches (word as substring), but only if they're at word boundaries
+            // to avoid false positives like "fag" in "staffage"
+            List<Keyword> allMatches = heatKeywordMatcher.findAllMatches(normalizedMessage);
+            for (Keyword kw : allMatches) {
+                if (!foundKeywords.contains(kw)) {
+                    // Check if this match appears at word boundaries somewhere in the text
+                    int index = normalizedMessage.indexOf(kw.word);
+                    boolean foundValidBoundary = false;
+                    
+                    while (index != -1) {
+                        boolean validBefore = (index == 0) || !Character.isLetterOrDigit(normalizedMessage.charAt(index - 1));
+                        int endIndex = index + kw.word.length();
+                        boolean validAfter = (endIndex == normalizedMessage.length()) || !Character.isLetterOrDigit(normalizedMessage.charAt(endIndex));
+                        
+                        if (validBefore && validAfter) {
+                            // This is already a whole word match, skip it (should have been caught above)
+                            foundValidBoundary = true;
+                            break;
+                        } else if (validBefore || validAfter) {
+                            // Partial match - only at one boundary, add with reduced heat
+                            foundKeywords.add(new Keyword(kw.word + "*", 0.2));
+                            foundValidBoundary = true;
+                            break;
+                        }
+                        
+                        index = normalizedMessage.indexOf(kw.word, index + 1);
+                    }
+                }
             }
+        }
+        
+        if (safeWordMatcher != null) {
+            foundSafeWords = safeWordMatcher.findWholeWordMatches(normalizedMessage);
+        }
+
+        // Calculate heat from keyword matches
+        for (Keyword kw : foundKeywords) {
+            heat += kw.heat;
+        }
+        
+        // Apply safe word reductions
+        for (Keyword sw : foundSafeWords) {
+            heat += sw.heat; // Safe words have negative heat
         }
 
         heat = Math.max(0, heat);
@@ -1415,5 +1566,44 @@ public class ModerationListener extends ListenerAdapter {
      */
     private void sendWarning(net.dv8tion.jda.api.JDA jda, String serverId, String userId, String reason) {
         sendWarning(jda, serverId, userId, reason, "", false, 0);
+    }
+    
+    /**
+     * Filters matched banned words to only those that appear at valid word boundaries.
+     * Prevents false positives like "fag" in "staffage" or "anus" in "canvas".
+     * A match is valid if it's either:
+     * - Preceded by a non-word character (or at the start of text)
+     * - AND followed by a non-word character (or at the end of text)
+     * 
+     * @param normalizedText The normalized message text to search in
+     * @param matches The set of matched words from Aho-Corasick
+     * @return A filtered set containing only matches at valid word boundaries
+     */
+    private Set<String> filterByWordBoundary(String normalizedText, Set<String> matches) {
+        Set<String> validMatches = new java.util.HashSet<>();
+        
+        for (String match : matches) {
+            // Search for all occurrences of this match in the text
+            int index = normalizedText.indexOf(match);
+            while (index != -1) {
+                // Check if character before match is a word boundary (or at start)
+                boolean validBefore = (index == 0) || !Character.isLetterOrDigit(normalizedText.charAt(index - 1));
+                
+                // Check if character after match is a word boundary (or at end)
+                int endIndex = index + match.length();
+                boolean validAfter = (endIndex == normalizedText.length()) || !Character.isLetterOrDigit(normalizedText.charAt(endIndex));
+                
+                // If this occurrence has valid boundaries, include the match
+                if (validBefore && validAfter) {
+                    validMatches.add(match);
+                    break; // Found one valid occurrence, no need to check further
+                }
+                
+                // Look for next occurrence
+                index = normalizedText.indexOf(match, index + 1);
+            }
+        }
+        
+        return validMatches;
     }
 }

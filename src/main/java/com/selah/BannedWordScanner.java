@@ -875,6 +875,28 @@ public class BannedWordScanner {
             variants.add(word + "ing"); // for words ending in 'e', just add 'ing'
         }
         
+        // English consonant doubling rule: CVC (consonant-vowel-consonant) pattern
+        // When adding -ed or -ing to CVC words, double the final consonant
+        // Examples: "fag" → "fagging", "fagged"; "stop" → "stopping", "stopped"; "run" → "running", "runned" (archaic)
+        if (word.length() >= 3) {
+            String lowerWord = word.toLowerCase();
+            char lastChar = lowerWord.charAt(word.length() - 1);
+            char secondLast = lowerWord.charAt(word.length() - 2);
+            char thirdLast = lowerWord.charAt(word.length() - 3);
+            
+            // Check if last char is consonant, second-last is vowel, third-last is consonant
+            boolean lastIsConsonant = "bcdfghjklmnpqrstvwxyz".indexOf(lastChar) >= 0;
+            boolean secondIsVowel = "aeiou".indexOf(secondLast) >= 0;
+            boolean thirdIsConsonant = "bcdfghjklmnpqrstvwxyz".indexOf(thirdLast) >= 0;
+            
+            if (lastIsConsonant && secondIsVowel && thirdIsConsonant) {
+                // Double the final consonant for -ing and -ed
+                String doubledForm = word + lastChar;
+                variants.add(doubledForm + "ing");
+                variants.add(doubledForm + "ed");
+            }
+        }
+        
         return variants;
     }
 
@@ -884,7 +906,7 @@ public class BannedWordScanner {
      * @param word The word to generate variants for.
      * @return A list of all space-inserted variants.
      */
-    private static List<String> generateSpaceVariants(String word) {
+    public static List<String> generateSpaceVariants(String word) {
         List<String> variants = new ArrayList<>();
         int length = word.length();
         
