@@ -7,7 +7,10 @@ import java.util.Random;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Map;
+import java.util.LinkedHashSet;
 import com.google.gson.Gson;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
@@ -169,61 +172,53 @@ public class BenchmarkTestMode {
         System.out.println("Should check context: " + shouldCheckContext);
         System.out.println("(Context checks skipped for long messages to avoid excess API calls)\n");
         
-        // Timing: Full scan matching ModerationListener logic
+        // BENCHMARK 1: Current method (individual checks)
+        System.out.println("========== BENCHMARK 1: Individual Pattern Matching (CURRENT) ==========");
         long start = System.nanoTime();
-        int matchCount = 0;
-        List<String> matchedWords = new ArrayList<>();
+        int matchCount1 = 0;
+        List<String> matchedWords1 = new ArrayList<>();
         
         for (String bannedWord : bannedWords) {
-            // Check current message
-            boolean foundInCurrentMessage = BannedWordScanner.isBannedWordPresent(message, bannedWord);
-            
-            boolean foundWithContext = false;
-            boolean foundWithContextNoSpaces = false;
-            
-            // Only check context variations if enabled AND current message was clean AND message is short
-            if (shouldCheckContext && !foundInCurrentMessage) {
-                // In a real scenario, messageWithContext would include previous messages
-                // For this benchmark, we'll skip it since there's no previous message context
-                foundWithContext = false;
-                foundWithContextNoSpaces = false;
-            }
-            
-            if (foundInCurrentMessage || foundWithContext || foundWithContextNoSpaces) {
-                matchCount++;
-                matchedWords.add(bannedWord);
+            if (BannedWordScanner.isBannedWordPresent(message, bannedWord)) {
+                matchCount1++;
+                matchedWords1.add(bannedWord);
             }
         }
-        long scanTime = System.nanoTime() - start;
+        long time1 = System.nanoTime() - start;
+        System.out.printf("Time: %.4f ms%n", time1 / 1_000_000.0);
+        System.out.printf("Average per word: %.4f ms%n", (time1 / 1_000_000.0) / bannedWords.size());
+        System.out.println("Matches found: " + matchCount1);
         
-        // Print results
-        System.out.println("========== TIMING BREAKDOWN ==========");
-        System.out.printf("Full scanning (all words): %.4f ms%n", scanTime / 1_000_000.0);
-        System.out.printf("Average per banned word: %.4f ms%n", (scanTime / 1_000_000.0) / bannedWords.size());
+        // BENCHMARK 2: Aho-Corasick algorithm (optimized)
+        System.out.println("\n========== BENCHMARK 2: Aho-Corasick Algorithm (OPTIMIZED) ==========");
+        start = System.nanoTime();
+        AhoCorasickMatcher matcher = new AhoCorasickMatcher(bannedWords);
+        long matcherBuildTime = System.nanoTime() - start;
         
+        start = System.nanoTime();
+        Set<String> matchedWords2 = matcher.findMatches(message);
+        long matchTime = System.nanoTime() - start;
+        long time2 = matcherBuildTime + matchTime;
+        
+        System.out.printf("Build time: %.4f ms%n", matcherBuildTime / 1_000_000.0);
+        System.out.printf("Search time: %.4f ms%n", matchTime / 1_000_000.0);
+        System.out.printf("Total time: %.4f ms%n", time2 / 1_000_000.0);
+        System.out.println("Matches found: " + matchedWords2.size());
+        
+        // Performance comparison
+        System.out.println("\n========== PERFORMANCE COMPARISON ==========");
+        double speedup = (double) time1 / time2;
+        System.out.printf("Speedup: %.2fx faster with Aho-Corasick%n", speedup);
+        System.out.printf("Time saved: %.4f ms%n", (time1 - time2) / 1_000_000.0);
+        
+        // Results
         System.out.println("\n========== RESULTS ==========");
-        System.out.println("Total matches found: " + matchCount);
-        if (matchCount > 0) {
+        System.out.println("Total matches found: " + matchCount1);
+        if (matchCount1 > 0) {
             System.out.println("Matching words:");
-            for (String word : matchedWords) {
+            for (String word : matchedWords1) {
                 System.out.println("  - " + word);
             }
-        }
-        
-        System.out.println("\n========== ANALYSIS ==========");
-        double totalMs = scanTime / 1_000_000.0;
-        if (totalMs > 100) {
-            System.out.println("⚠ SLOW: Full scan took " + String.format("%.4f", totalMs) + "ms");
-        } else if (totalMs > 10) {
-            System.out.println("⚠ Acceptable: Full scan took " + String.format("%.4f", totalMs) + "ms");
-        } else {
-            System.out.println("✓ FAST: Full scan took " + String.format("%.4f", totalMs) + "ms");
-        }
-        
-        System.out.println("\n========== PERFORMANCE METRICS ==========");
-        if (totalMs > 0) {
-            System.out.printf("Messages per second (single): %.0f%n", 1000 / totalMs);
-            System.out.printf("Words per millisecond: %.2f%n", bannedWords.size() / totalMs);
         }
         
         System.out.println();
