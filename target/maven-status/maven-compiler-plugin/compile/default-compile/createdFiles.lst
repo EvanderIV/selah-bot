@@ -1,6 +1,7 @@
 com\selah\StatsManager$ChannelStats.class
 com\selah\StatsManager$MemberStats.class
 com\selah\App$ServerNode.class
+com\selah\BenchmarkTestMode.class
 com\selah\BannedWordScanner.class
 com\selah\MonitorManager.class
 com\selah\PunishmentManager.class
@@ -11,6 +12,7 @@ com\selah\Keyword.class
 com\selah\App$ConfigData.class
 com\selah\KeywordManager$KeywordFile.class
 com\selah\ModerationListener.class
+com\selah\BenchmarkTestMode$BenchmarkListener.class
 com\selah\OCRProcessor.class
 com\selah\StatsManager$ServerStats.class
 com\selah\ArchiveManager.class

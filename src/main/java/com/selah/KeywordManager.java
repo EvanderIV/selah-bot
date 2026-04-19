@@ -56,4 +56,16 @@ public class KeywordManager {
             e.printStackTrace();
         }
     }
+
+    /**
+     * Returns all keyword words as a list of strings.
+     * @return A list containing the word of each keyword.
+     */
+    public static List<String> getAllKeywords() {
+        List<String> allWords = new ArrayList<>();
+        for (Keyword kw : keywords) {
+            allWords.add(kw.word);
+        }
+        return allWords;
+    }
 }

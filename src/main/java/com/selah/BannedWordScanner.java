@@ -846,7 +846,7 @@ public class BannedWordScanner {
      * @param word The base word to generate variants for.
      * @return A list containing the original word and its grammatical variants.
      */
-    private static List<String> generateGrammarVariants(String word) {
+    public static List<String> generateGrammarVariants(String word) {
         List<String> variants = new ArrayList<>();
         
         // Always include the original word

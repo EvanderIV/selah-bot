@@ -1,12 +1,13 @@
 C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\ArchiveManager.java
-C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\MonitorManager.java
 C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\StatsManager.java
-C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\Keyword.java
+C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\BenchmarkTestMode.java
 C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\BadImageException.java
 C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\ModerationListener.java
 C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\App.java
 C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\OCRProcessor.java
+C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\MessageEmptyException.java
+C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\MonitorManager.java
+C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\Keyword.java
 C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\BannedWordScanner.java
 C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\KeywordManager.java
 C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\PunishmentManager.java
-C:\Users\evanm\Documents\selah-bot\src\main\java\com\selah\MessageEmptyException.java

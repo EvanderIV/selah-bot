@@ -81,6 +81,19 @@ public class App {
             System.out.println("--- DIET MODE ENABLED: Checking current message only (no context) ---");
         }
 
+        // Check for test mode flag
+        if (args.length > 0 && ("--benchmark".equalsIgnoreCase(args[0]) || "-bm".equalsIgnoreCase(args[0]))) {
+            try {
+                KeywordManager.loadKeywords(); // Load keywords from JSON
+                BenchmarkTestMode.runTestMode();
+            } catch (Exception e) {
+                System.err.println("ERROR in benchmark test mode:");
+                e.printStackTrace();
+                System.exit(1);
+            }
+            return;
+        }
+
         if (args.length > 0 && ("--check".equalsIgnoreCase(args[0]) || "-c".equalsIgnoreCase(args[0]))) {
             if (args.length < 2) {
                 System.err.println("ERROR: -c requires an input string. Usage: -c <quoted string>");
