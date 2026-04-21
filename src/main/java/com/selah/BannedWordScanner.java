@@ -509,6 +509,7 @@ public class BannedWordScanner {
                 .replace("𐌼", "m").replace("𐌽", "n").replace("𐌾", "j")
                 .replace("𐌿", "u").replace("𐍀", "p").replace("𐍁", "f")
                 .replace("𐍂", "r").replace("𐍃", "s").replace("𐍄", "t")
+                .replace("\uD800\uDF04", "g")  // Gothic E (U+10304) → 'g'
                 // Hangul Jamo (Korean): 
                 .replace("ᄀ", "g").replace("ᄁ", "g").replace("ᄂ", "n")
                 .replace("ᄃ", "d").replace("ᄄ", "d").replace("ᄅ", "r")
@@ -664,7 +665,96 @@ public class BannedWordScanner {
                 .replace("Ꮼ", "z").replace("ꮼ", "z")  // Cherokee TH
                 .replace("Ꮽ", "z").replace("ꮽ", "z")  // Cherokee GHN
                 .replace("Ꮾ", "z").replace("ꮾ", "z")  // Cherokee KN
-                .replace("Ꮿ", "z").replace("ꮿ", "z"); // Cherokee PS
+                .replace("Ꮿ", "z").replace("ꮿ", "z")  // Cherokee PS
+                .replace("\u13F5", "g");  // Cherokee Ᏽ (U+13F5) → 'g'
+        // Add missing uppercase mathematical alphanumeric characters (must be before non-BMP strip)
+        cleaned = cleaned
+                // Mathematical Bold Italic uppercase: 𝑨-𝒁
+                .replace("𝑨", "A").replace("𝑩", "B").replace("𝑪", "C")
+                .replace("𝑫", "D").replace("𝑬", "E").replace("𝑭", "F")
+                .replace("𝑮", "G").replace("𝑯", "H").replace("𝑰", "I")
+                .replace("𝑱", "J").replace("𝑲", "K").replace("𝑳", "L")
+                .replace("𝑴", "M").replace("𝑵", "N").replace("𝑶", "O")
+                .replace("𝑷", "P").replace("𝑸", "Q").replace("𝑹", "R")
+                .replace("𝑺", "S").replace("𝑻", "T").replace("𝑼", "U")
+                .replace("𝑽", "V").replace("𝑾", "W").replace("𝑿", "X")
+                .replace("𝒀", "Y").replace("𝒁", "Z")
+                // Mathematical Bold Italic lowercase: 𝒂-𝒛
+                .replace("𝒂", "a").replace("𝒃", "b").replace("𝒄", "c")
+                .replace("𝒅", "d").replace("𝒆", "e").replace("𝒇", "f")
+                .replace("𝒈", "g").replace("𝒉", "h").replace("𝒊", "i")
+                .replace("𝒋", "j").replace("𝒌", "k").replace("𝒍", "l")
+                .replace("𝒎", "m").replace("𝒏", "n").replace("𝒐", "o")
+                .replace("𝒑", "p").replace("𝒒", "q").replace("𝒓", "r")
+                .replace("𝒔", "s").replace("𝒕", "t").replace("𝒖", "u")
+                .replace("𝒗", "v").replace("𝒘", "w").replace("𝒙", "x")
+                .replace("𝒚", "y").replace("𝒛", "z")
+                // Mathematical Bold Script uppercase: 𝓐-𝓩
+                .replace("𝓐", "A").replace("𝓑", "B").replace("𝓒", "C")
+                .replace("𝓓", "D").replace("𝓔", "E").replace("𝓕", "F")
+                .replace("𝓖", "G").replace("𝓗", "H").replace("𝓘", "I")
+                .replace("𝓙", "J").replace("𝓚", "K").replace("𝓛", "L")
+                .replace("𝓜", "M").replace("𝓝", "N").replace("𝓞", "O")
+                .replace("𝓟", "P").replace("𝓠", "Q").replace("𝓡", "R")
+                .replace("𝓢", "S").replace("𝓣", "T").replace("𝓤", "U")
+                .replace("𝓥", "V").replace("𝓦", "W").replace("𝓧", "X")
+                .replace("𝓨", "Y").replace("𝓩", "Z")
+                // Mathematical Double-Struck uppercase: 𝔸-𝖅
+                .replace("𝔸", "A").replace("𝔹", "B").replace("𝔻", "D")
+                .replace("𝔼", "E").replace("𝔽", "F").replace("𝔾", "G")
+                .replace("𝕳", "H").replace("𝕴", "I").replace("𝕵", "J")
+                .replace("𝕶", "K").replace("𝕷", "L").replace("𝕸", "M")
+                .replace("𝕹", "N").replace("𝕺", "O").replace("𝕻", "P")
+                .replace("𝕼", "Q").replace("𝕽", "R").replace("𝕾", "S")
+                .replace("𝕿", "T").replace("𝖀", "U").replace("𝖁", "V")
+                .replace("𝖂", "W").replace("𝖃", "X").replace("𝖄", "Y")
+                .replace("𝖅", "Z")
+                // Mathematical Sans-Serif Bold Italic - explicit Unicode escapes to ensure accuracy
+                // Uppercase A-Z: U+1D49E to U+1D4B7
+                .replace("\uD835\uDC9E", "A").replace("\uD835\uDC9F", "B")  // U+1D49E, U+1D49F
+                .replace("\uD835\uDCA0", "C").replace("\uD835\uDCA1", "D")  // U+1D4A0, U+1D4A1
+                .replace("\uD835\uDCA2", "G")  // U+1D4A2 - This is 𝒢 that was missing!
+                .replace("\uD835\uDCA3", "H").replace("\uD835\uDCA4", "I")  // U+1D4A3, U+1D4A4
+                .replace("\uD835\uDCA5", "J").replace("\uD835\uDCA6", "K")  // U+1D4A5, U+1D4A6
+                .replace("\uD835\uDCA7", "L").replace("\uD835\uDCA8", "M")  // U+1D4A7, U+1D4A8
+                .replace("\uD835\uDCA9", "N").replace("\uD835\uDCAA", "O")  // U+1D4A9, U+1D4AA
+                .replace("\uD835\uDCAB", "P").replace("\uD835\uDCAC", "Q")  // U+1D4AB, U+1D4AC
+                .replace("\uD835\uDCAD", "R").replace("\uD835\uDCAE", "S")  // U+1D4AD, U+1D4AE
+                .replace("\uD835\uDCAF", "T").replace("\uD835\uDCB0", "U")  // U+1D4AF, U+1D4B0
+                .replace("\uD835\uDCB1", "V").replace("\uD835\uDCB2", "W")  // U+1D4B1, U+1D4B2
+                .replace("\uD835\uDCB3", "X").replace("\uD835\uDCB4", "Y")  // U+1D4B3, U+1D4B4
+                .replace("\uD835\uDCB5", "Z")  // U+1D4B5
+                // Lowercase a-z: U+1D4B6 onwards
+                .replace("\uD835\uDCB6", "a").replace("\uD835\uDCB7", "b")  // U+1D4B6, U+1D4B7
+                .replace("\uD835\uDCB8", "c").replace("\uD835\uDCB9", "d")  // U+1D4B8, U+1D4B9
+                .replace("\uD835\uDCBA", "e").replace("\uD835\uDCBB", "f")  // U+1D4BA, U+1D4BB
+                .replace("\uD835\uDCBC", "g").replace("\uD835\uDCBD", "h")  // U+1D4BC, U+1D4BD
+                .replace("\uD835\uDCBE", "i").replace("\uD835\uDCBF", "j")  // U+1D4BE, U+1D4BF
+                .replace("\uD835\uDCC0", "k").replace("\uD835\uDCC1", "l")  // U+1D4C0, U+1D4C1
+                .replace("\uD835\uDCC2", "m").replace("\uD835\uDCC3", "n")  // U+1D4C2, U+1D4C3
+                .replace("\uD835\uDCC4", "o").replace("\uD835\uDCC5", "p")  // U+1D4C4, U+1D4C5
+                .replace("\uD835\uDCC6", "q").replace("\uD835\uDCC7", "r")  // U+1D4C6, U+1D4C7
+                .replace("\uD835\uDCC8", "s").replace("\uD835\uDCC9", "t")  // U+1D4C8, U+1D4C9
+                .replace("\uD835\uDCCA", "u").replace("\uD835\uDCCB", "v")  // U+1D4CA, U+1D4CB
+                .replace("\uD835\uDCCC", "w").replace("\uD835\uDCCD", "x")  // U+1D4CC, U+1D4CD
+                .replace("\uD835\uDCCE", "y").replace("\uD835\uDCCF", "z")  // U+1D4CE, U+1D4CF
+                // Mathematical Sans-Serif Bold lowercase n: U+1D5FB
+                .replace("\uD835\uDD7B", "n")  // U+1D5FB (𝗻)
+                // Mathematical Double-Struck G: U+1D572
+                .replace("\uD835\uDD72", "g")  // U+1D572 (𝕲)
+                // Mathematical Bold Script G: U+1D4D6
+                .replace("\uD835\uDCD6", "g")  // U+1D4D6 (𝓖)
+                // Emoji - Squared I: U+1F178
+                .replace("\uD83C\uDD78", "i")  // U+1F178 (🅸)
+                // Egyptian symbols - U+131A9 and U+131AA
+                .replace("\uD808\uDDA9", "e").replace("\uD808\uDDAA", "r")  // U+131A9 (𓆩) and U+131AA (𓆪)
+                // IPA - ɍ: U+024D
+                .replace("\u024D", "r")  // U+024D (ɍ)
+                // Basic accented e characters for safety (ē and related)
+                .replace('\u0113', 'e').replace('\u0112', 'e')  // ē and Ē (e with macron)
+                .replace('\u00EB', 'e').replace('\u00EA', 'e')  // ë and ê
+                // Mathematical Sans-Serif Bold uppercase R: U+1D5E5
+                .replace("\uD835\uDDE5", "r");  // U+1D5E5 (𝗥)
         
         // Strip non-BMP characters we don't care about
         cleaned = cleaned.replaceAll("[^\u0000-\uFFFF]", "");
@@ -835,7 +925,8 @@ public class BannedWordScanner {
                 .replace("'", "").replace('0', 'o').replace('1', 'i').replace('3', 'e')
                 .replace('4', 'a').replace('5', 's').replace('6', 'g').replace('7', 't')
                 .replace('8', 'b').replace('@', 'a').replace('$', 's').replace('!', 'i')
-                .replace('|', 'i').replace('¡', 'i').replace('Ǥ', 'g').replace('ɳ', 'n')
+                .replace('|', 'i').replace('¡', 'i')  // Inverted exclamation
+                .replace('Ǥ', 'g').replace('ɳ', 'n')
                 .replace('ɨ', 'i').replace('ɢ', 'g').replace('ɛ', 'e').replace('ʀ', 'r')
                 .replace('ġ', 'g').replace('є', 'e').replace('₦', 'n').replace('₲', 'g')
                 .replace('ł', 'l').replace('*', 'a').replace(':', 'i'); // Colon looks like 'i' vertically
